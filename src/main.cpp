@@ -77,19 +77,16 @@ void matrixScan() {
     gpio_set_level(rowPins[row], 1);
     for (uint8_t col = 0; col < MATRIX_COLS; col++) {
       curState = gpio_get_level(colPins[col]);
-      if (matrixOld[row][col] != curState) {
-        DEBOUNCE_MATRIX[row][col] = matrixTick;
+      if (keyEvents[row][col].curState != curState) {
+        keyEvents[row][col].time_debounce = matrixTick;
       }
-      matrixOld[row][col] = curState;
-      if ((matrixTick - DEBOUNCE_MATRIX[row][col]) > DEBOUNCE) {
-        if ((matrixState[row][col] != 0) xor curState) {
+      if ((matrixTick - keyEvents[row][col].time_debounce) > DEBOUNCE) {
+        if (keyEvents[row][col].pressed != curState) {
           matrixChange = 1;
-          keyEvents.key.col = col;
-          keyEvents.key.row = row;
-          keyEvents.pressed = curState;
-          keyEvents.time = esp_timer_get_time();
+          keyEvents[row][col].pressed = curState;
         }
       }
+      keyEvents[row][col].curState = curState;
     }
     gpio_set_level(rowPins[row], 0);
   }
@@ -97,18 +94,58 @@ void matrixScan() {
 
 // press >time> hold; release tap >time> release
 void matrixProces() {
-  uint16_t keycode;
+  uint8_t keycode;
   for (uint8_t row = 0; row < MATRIX_ROWS; row++) {
     for (uint8_t col = 0; col < MATRIX_COLS; col++) {
-      keycode = keyMap[curLayer][row][col];
-      if (matrixState[row][col == 0]) {
-        bleKeyboard.release(keycode);
+      keycode = keyMap[curLayer][row][col] & 0x00FF;  // TODO transparent
+      switch (keyEvents[row][col].state) {
+        case KS_UP:
+          if (keyEvents[row][col].pressed == 1) {
+            keyEvents[row][col].state = KS_DOWN;
+            keyEvents[row][col].time_press = matrixTick;
+          }
+          break;
+        case KS_DOWN:
+          if (matrixTick >
+              uint32_t(keyEvents[row][col].time_press + MODTAP_TIME)) {
+            if (keyEvents[row][col].pressed == 1) {
+              keyEvents[row][col].state = KS_HOLD;
+              Serial.printf("press %d 0x%04x .. ", keycode,
+                            keyMap[curLayer][row][col]);
+              bleKeyboard.press(keycode);
+            } else {
+              keyEvents[row][col].state = KS_TAP;
+            }
+          }
+          break;
+        case KS_HOLD:
+          if (keyEvents[row][col].pressed == 0) {
+            keyEvents[row][col].state = KS_UP;
+            Serial.printf("release %d\n", keycode);
+            bleKeyboard.release(keycode);
+          }
+          break;
+        case KS_TAP:
+          if (keyEvents[row][col].pressed == 0) {
+            keyEvents[row][col].state = KS_UP;
+            Serial.printf("write %d\n", keycode);
+            bleKeyboard.write(keycode);
+          }
+          break;
+        default:
+          Serial.println(
+              "Upss.. wrong keyEvents[row][col].state in matrixProcess()");
+          break;
       }
-      if (matrixState[row][col] < MODTAP_TIME) {
-        bleKeyboard.write(keycode);
-      } else {
-        bleKeyboard.press(keycode);
-      }
+    }
+  }
+}
+
+void keyboardSetup() {
+  for (uint8_t row = 0; row < MATRIX_ROWS; row++) {
+    for (uint8_t col = 0; col < MATRIX_COLS; col++) {
+      keyEvents[row][col].state = KS_UP;
+      keyEvents[row][col].time_press = 0;
     }
   }
 }
@@ -117,11 +154,11 @@ void matrixProces() {
 void keyboardTask(void *pvParameters) {
   while (1) {
     matrixScan();
+    matrixProces();
     if (matrixChange == 1) {
       matrixChange = 0;
       tmOut = 0;
       if (powerSave == 1) powerSave++;
-      matrixProces();
     }
     vTaskDelay(1 / portTICK_PERIOD_MS);
   }

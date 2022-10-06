@@ -9,7 +9,7 @@
 #define GATTS_TAG "MMK V0.5"  // The device's name
 #define MAX_BT_DEVICENAME_LENGTH 40
 #define SLEEP_DELAY 300  // 5 * 60  // 5 min to sleep
-#define MODTAP_TIME 1200
+#define MODTAP_TIME 220
 #define DEBOUNCE 4  // debounce time in ms
 
 #define CHECK_BIT(var, pos) ((var) & (1 << (pos)))
@@ -41,6 +41,7 @@ uint8_t MACAddress[maxBTdev][6] = {{0x35, 0xAF, 0xA4, 0x07, 0x0B, 0x66},
                                    {0x31, 0xAE, 0xAA, 0x47, 0x0D, 0x61},
                                    {0x31, 0xAE, 0xAC, 0x42, 0x0A, 0x31}};
 
+enum keyState { KS_UP = 0, KS_DOWN, KS_HOLD, KS_TAP, KS_DTAP };
 /* key matrix position */
 typedef struct {
   uint8_t col;
@@ -49,9 +50,11 @@ typedef struct {
 
 /* key event */
 typedef struct {
-  keypos_t key;
   bool pressed;
-  uint16_t time;
+  bool curState;
+  uint8_t state;
+  uint16_t time_debounce;
+  uint16_t time_press;
 } keyevent_t;
 
 // Define matrix
@@ -67,7 +70,7 @@ uint8_t curLayer = 0;
 #define RAISE TO(2)
 #define NUM TO(3)
 #define ENT_SFT MT(KC_ENTER, KC_LSHIFT)
-keyevent_t keyEvents{};
+keyevent_t keyEvents[MATRIX_ROWS][MATRIX_COLS] = {};
 uint16_t keyMap[MATRIX_LAYERS][MATRIX_ROWS][MATRIX_COLS] = {
     {{KC_Q, KC_W, KC_E, KC_R, KC_T, KC_Y, KC_U, KC_I, KC_O, KC_P},
      {KC_A, KC_S, KC_D, KC_F, KC_G, KC_H, KC_J, KC_K, KC_L, KC_SCLN},
