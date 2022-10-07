@@ -5,6 +5,7 @@ U8G2_SSD1306_128X32_UNIVISION_F_HW_I2C u8x8(U8G2_R3, /* reset=*/U8X8_PIN_NONE,
                                             /* clock=*/OLED_SCL_PIN,
                                             /* data=*/OLED_SDA_PIN);
 BleKeyboard bleKeyboard(GATTS_TAG, "HNA", 100);
+uint8_t reportReady = 0;
 KeyReport report = {0};
 uint8_t powerSave = 0;
 uint64_t msec, lsec = 0;
@@ -214,7 +215,8 @@ void matrixProces() {
       }
     }
   }
-  bleKeyboard.sendReport(&report);
+  // bleKeyboard.sendReport(&report);
+  reportReady = 1;
 }
 
 void keyboardSetup() {
@@ -263,6 +265,9 @@ void loop(void) {
   if ((msec - lsec) > uint64_t(100000)) {  // every 1 mili second
     lsec = msec;
     tmOut++;
+    if (reportReady) {
+      bleKeyboard.sendReport(&report);
+    }
     if (powerSave == 2) {
       powerSave = 0;
       u8x8.setPowerSave(powerSave);
