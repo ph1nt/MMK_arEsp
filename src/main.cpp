@@ -4,7 +4,8 @@
 U8G2_SSD1306_128X32_UNIVISION_F_HW_I2C u8x8(U8G2_R3, /* reset=*/U8X8_PIN_NONE,
                                             /* clock=*/OLED_SCL_PIN,
                                             /* data=*/OLED_SDA_PIN);
-BleKeyboard bleKeyboard;
+BleKeyboard bleKeyboard(GATTS_TAG, "HNA", 100);
+KeyReport report = {0};
 uint8_t powerSave = 0;
 uint64_t msec, lsec = 0;
 uint16_t matrixTick = 0;
@@ -92,12 +93,84 @@ void matrixScan() {
   }
 }
 
+void matrixPress(uint16_t keycode, uint8_t _hold) {
+  uint8_t k = 0;
+  uint8_t mediaReport[2] = {0, 0};
+  if (keycode & 0x8000) {
+    if (_hold) {
+      curLayer = (keycode & 0x0F00) >> 8;
+    } else {
+      k = (keycode & 0x00FF);
+    }
+    Serial.printf("layer 0x%02x or TAP key 0x%02x ", (keycode & 0x0F00) >> 8,
+                  (keycode & 0x00FF));
+  } else {
+    if (keycode & 0x4000) {
+      mediaReport[0] = (1 << ((keycode & 0x00FF) - 0x0C));
+      bleKeyboard.press(mediaReport);
+      Serial.printf("consumer control 0x%02x ", (keycode & 0x00FF));
+    } else {
+      if (keycode & 0x2000) {
+        if (_hold) {
+          report.modifiers |=
+              ((keycode & 0x0F00) >> (4 + 4 * (keycode & 0x1000)));
+        } else {
+          k = (keycode & 0x00FF);
+        }
+        Serial.printf("modifier 0x%02x or TAP key 0x%02x ", report.modifiers,
+                      (keycode & 0x00FF));
+      } else {
+        if (keycode & 0x1F00) {
+          report.modifiers |=
+              ((keycode & 0x0F00) >> (4 + 4 * (keycode & 0x1000)));
+          k = (keycode & 0x00FF);
+          Serial.printf("modifier 0x%02x and key 0x%02x ",
+                        (keycode & 0x1F00) >> 8, (keycode & 0x00FF));
+        } else {
+          k = (keycode & 0x00FF);
+        }
+      }
+    }
+  }
+  if (!k) {
+    if (report.keys[0] != k && report.keys[1] != k && report.keys[2] != k &&
+        report.keys[3] != k && report.keys[4] != k && report.keys[5] != k) {
+      for (uint8_t i = 0; i < 6; i++) {
+        if (report.keys[i] == 0x00) {
+          report.keys[i] = k;
+          break;
+        }
+      }
+    }
+  }
+  Serial.printf("layer:%d keycode:0x%04x\n", curLayer, k);
+}
+
+void matrixRelease(uint16_t keycode) {
+  uint8_t k;
+  uint8_t mediaReport[2] = {0, 0};
+  if (keycode & 0x8000) {
+    curLayer = 0;
+  }
+  k = (keycode & 0x00FF);
+  if (keycode & 0x4000) {
+    mediaReport[0] = (1 << ((keycode & 0x00FF) - 0x0C));
+    bleKeyboard.release(mediaReport);
+  } else {
+    for (uint8_t i = 0; i < 6; i++) {
+      if (0 != k && report.keys[i] == k) {
+        report.keys[i] = 0x00;
+      }
+    }
+  }
+}
+
 // press >time> hold; release tap >time> release
 void matrixProces() {
-  uint8_t keycode;
+  uint16_t keycode;
   for (uint8_t row = 0; row < MATRIX_ROWS; row++) {
     for (uint8_t col = 0; col < MATRIX_COLS; col++) {
-      keycode = keyMap[curLayer][row][col] & 0x00FF;  // TODO transparent
+      keycode = keyMap[curLayer][row][col];  // TODO transparent
       switch (keyEvents[row][col].state) {
         case KS_UP:
           if (keyEvents[row][col].pressed == 1) {
@@ -110,9 +183,9 @@ void matrixProces() {
               uint32_t(keyEvents[row][col].time_press + MODTAP_TIME)) {
             if (keyEvents[row][col].pressed == 1) {
               keyEvents[row][col].state = KS_HOLD;
-              Serial.printf("press %d 0x%04x .. ", keycode,
-                            keyMap[curLayer][row][col]);
-              bleKeyboard.press(keycode);
+              // Serial.printf("press %d 0x%04x .. ", keycode,
+              // keyMap[curLayer][row][col]);
+              matrixPress(keycode, 1);
             } else {
               keyEvents[row][col].state = KS_TAP;
             }
@@ -121,15 +194,17 @@ void matrixProces() {
         case KS_HOLD:
           if (keyEvents[row][col].pressed == 0) {
             keyEvents[row][col].state = KS_UP;
-            Serial.printf("release %d\n", keycode);
-            bleKeyboard.release(keycode);
+            // Serial.printf("release %d\n", keycode);
+            matrixRelease(keycode);
           }
           break;
         case KS_TAP:
           if (keyEvents[row][col].pressed == 0) {
             keyEvents[row][col].state = KS_UP;
-            Serial.printf("write %d\n", keycode);
-            bleKeyboard.write(keycode);
+            // Serial.printf("write %d\n", keycode);
+            matrixPress(keycode, 0);
+            delay(1);
+            matrixRelease(keycode);
           }
           break;
         default:
@@ -139,6 +214,7 @@ void matrixProces() {
       }
     }
   }
+  bleKeyboard.sendReport(&report);
 }
 
 void keyboardSetup() {

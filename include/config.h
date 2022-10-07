@@ -2,6 +2,7 @@
 #include <BleKeyboard.h>
 #include <EEPROM.h>
 #include <U8g2lib.h>
+#include <action_code.h>
 #include <keycode.h>
 #include <quantum_keycodes.h>
 
@@ -66,17 +67,33 @@ uint16_t matrixState[MATRIX_ROWS][MATRIX_COLS] = {0};
 uint16_t DEBOUNCE_MATRIX[MATRIX_ROWS][MATRIX_COLS] = {0};
 uint8_t matrixChange = 0;  // semafor to make analise
 uint8_t curLayer = 0;
+#define LT(layer, kc) (0x8000 | (((layer)&0xF) << 8) | ((kc)&0xFF))
+#define MT(mod, kc) (0x2000 | (((mod)&0x1F) << 8) | ((kc)&0xFF))
+#define TO(layer) (0x8000 | (((layer)&0xF) << 8))
 #define LOWER TO(1)
-#define RAISE TO(2)
-#define NUM TO(3)
-#define ENT_SFT MT(KC_ENTER, KC_LSHIFT)
+#define RAISE LT(2, KC_BSPACE)
+#define NUM LT(3, KC_COMMA)
+#define ENT_SFT MT(MOD_LSFT, KC_ENTER)
+#define LGUI_ESC MT(MOD_LGUI, KC_ESC)
 keyevent_t keyEvents[MATRIX_ROWS][MATRIX_COLS] = {};
+/*
+ * Mod bits:    43210
+ *   bit 0      ||||+- Control
+ *   bit 1      |||+-- Shift
+ *   bit 2      ||+--- Alt
+ *   bit 3      |+---- Gui
+ *   bit 4      +----- LR flag(Left:0, Right:1)
+ * 000r|mods| keycode     Modifiers + Key (Modified key)
+ * 001r|mods| keycode     Modifiers + Tap Key(Dual role)
+ * 0100|01| usage(10)     Consumer control(0x01) - Consumer page(0x0C)
+ * 1000|LLLL| keycode     Layer + Tap Key(0x00-DF)[TAP]
+ */
 uint16_t keyMap[MATRIX_LAYERS][MATRIX_ROWS][MATRIX_COLS] = {
     {{KC_Q, KC_W, KC_E, KC_R, KC_T, KC_Y, KC_U, KC_I, KC_O, KC_P},
-     {KC_A, KC_S, KC_D, KC_F, KC_G, KC_H, KC_J, KC_K, KC_L, KC_SCLN},
+     {KC_A, KC_S, KC_D, KC_F, KC_G, KC_H, KC_J, KC_L, KC_K, KC_SCLN},
      {KC_Z, KC_X, KC_C, KC_V, KC_B, KC_N, KC_M, KC_COMM, KC_DOT, KC_SLSH},
-     {NUM, KC_LCTRL, KC_LALT, LOWER, KC_NO, KC_SPACE, KC_NO, RAISE, ENT_SFT,
-      KC_LGUI}},
+     {NUM, KC_LCTRL, KC_LALT, KC_NO, LOWER, KC_SPACE, KC_NO, RAISE, ENT_SFT,
+      LGUI_ESC}},
     {{KC_1, KC_2, KC_3, KC_4, KC_5, KC_6, KC_7, KC_8, KC_9, KC_0},
      {KC_F1, KC_F2, KC_F3, KC_F4, KC_F5, KC_LEFT, KC_DOWN, KC_UP, KC_RIGHT,
       KC_ENTER},
@@ -93,6 +110,6 @@ uint16_t keyMap[MATRIX_LAYERS][MATRIX_ROWS][MATRIX_COLS] = {
       KC_LGUI}},
     {{KC_GRV, KC_3, KC_4, KC_5, KC_6, KC_7, KC_8, KC_9, KC_0, KC_BSPC},
      {KC_ESC, KC_E, KC_R, KC_T, KC_Y, KC_U, KC_I, KC_O, KC_P, KC_BSPC},
-     {KC_TAB, KC_D, KC_F, KC_G, KC_H, KC_J, KC_K, KC_L, KC_SCLN, KC_QUOT},
+     {KC_TAB, KC_D, KC_F, KC_G, KC_H, KC_J, KC_L, KC_K, KC_SCLN, KC_QUOT},
      {NUM, KC_LCTRL, KC_LALT, LOWER, KC_NO, KC_BSLS, KC_NO, RAISE, KC_ENTER,
       KC_LGUI}}};
