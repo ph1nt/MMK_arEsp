@@ -38,11 +38,11 @@ const gpio_num_t colPins[] = {
     GPIO_NUM_25, GPIO_NUM_26, GPIO_NUM_27, GPIO_NUM_14, GPIO_NUM_12};
 
 #define maxBTdev 3
-uint8_t MACAddress[maxBTdev][6] = {{0x35, 0xAF, 0xA4, 0x07, 0x0B, 0x66},
-                                   {0x31, 0xAE, 0xAA, 0x47, 0x0D, 0x61},
+uint8_t MACAddress[maxBTdev][6] = {{0x14, 0x88, 0xE6, 0x08, 0x3D, 0x03},
+                                   {0xA0, 0x78, 0x17, 0x74, 0x2F, 0xA6},
                                    {0x31, 0xAE, 0xAC, 0x42, 0x0A, 0x31}};
 
-enum keyState { KS_UP = 0, KS_DOWN, KS_HOLD, KS_TAP, KS_DTAP };
+enum keyState { KS_UP = 0, KS_DOWN, KS_HOLD, KS_TAP, KS_DTAP, KS_RELASE };
 /* key matrix position */
 typedef struct {
   uint8_t col;
@@ -58,14 +58,18 @@ typedef struct {
   uint16_t time_press;
 } keyevent_t;
 
+uint16_t deviceChose;
 // Define matrix
 #define MATRIX_ROWS 4
 #define MATRIX_COLS 10
-#define MATRIX_LAYERS 4  // number of layers defined
-uint16_t matrixOld[MATRIX_ROWS][MATRIX_COLS] = {0};
-uint16_t matrixState[MATRIX_ROWS][MATRIX_COLS] = {0};
-uint16_t DEBOUNCE_MATRIX[MATRIX_ROWS][MATRIX_COLS] = {0};
+#define MATRIX_LAYERS 4    // number of layers defined
 uint8_t matrixChange = 0;  // semafor to make analise
+uint8_t reportReady = 0;
+KeyReport report = {0};
+KeyReport releaseReport = {0};
+uint8_t powerSave = 0;
+uint64_t msec, lsec = 0;
+uint64_t matrixTick = 0;
 uint8_t curLayer = 0;
 #define LT(layer, kc) (0x8000 | (((layer)&0xF) << 8) | ((kc)&0xFF))
 #define MT(mod, kc) (0x2000 | (((mod)&0x1F) << 8) | ((kc)&0xFF))

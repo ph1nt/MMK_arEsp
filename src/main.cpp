@@ -5,11 +5,6 @@ U8G2_SSD1306_128X32_UNIVISION_F_HW_I2C u8x8(U8G2_R3, /* reset=*/U8X8_PIN_NONE,
                                             /* clock=*/OLED_SCL_PIN,
                                             /* data=*/OLED_SDA_PIN);
 BleKeyboard bleKeyboard(GATTS_TAG, "HNA", 100);
-uint8_t reportReady = 0;
-KeyReport report = {0};
-uint8_t powerSave = 0;
-uint64_t msec, lsec = 0;
-uint16_t matrixTick = 0;
 
 float_t getBatteryVoltage(void) {
   return analogReadMilliVolts(BATT_PIN) / 520.0;
@@ -36,6 +31,18 @@ void drawOled() {
   u8x8.drawStr(22, 127, "V");
   if (bleKeyboard.isConnected()) {
     u8x8.drawStr(0, 111, "BLE1");
+    u8x8.drawStr(22, 111, String(deviceChose).c_str());
+    switch (deviceChose) {
+      case 0:
+        u8x8.drawStr(0, 95, "iPad");
+        break;
+      case 1:
+        u8x8.drawStr(0, 95, "MBP");
+        break;
+      case 2:
+        u8x8.drawStr(0, 95, "iMac");
+        break;
+    }
   } else {
     u8x8.drawStr(0, 111, "----");
   }
@@ -97,6 +104,8 @@ void matrixScan() {
 void matrixPress(uint16_t keycode, uint8_t _hold) {
   uint8_t k = 0;
   uint8_t mediaReport[2] = {0, 0};
+  Serial.printf("\nat matrixTick:%d matrixPress(0x%04x, %d)\n", matrixTick,
+                keycode, _hold);
   if (keycode & 0x8000) {
     if (_hold) {
       curLayer = (keycode & 0x0F00) >> 8;
@@ -133,23 +142,28 @@ void matrixPress(uint16_t keycode, uint8_t _hold) {
       }
     }
   }
-  if (!k) {
-    if (report.keys[0] != k && report.keys[1] != k && report.keys[2] != k &&
-        report.keys[3] != k && report.keys[4] != k && report.keys[5] != k) {
+  if (k != 0) {
+    if ((report.keys[0] != k) && (report.keys[1] != k) &&
+        (report.keys[2] != k) && (report.keys[3] != k) &&
+        (report.keys[4] != k) && (report.keys[5] != k)) {
       for (uint8_t i = 0; i < 6; i++) {
         if (report.keys[i] == 0x00) {
+          Serial.printf("report.keys[%d] = %d", i, k);
           report.keys[i] = k;
           break;
         }
       }
     }
   }
-  Serial.printf("layer:%d keycode:0x%04x\n", curLayer, k);
+  Serial.printf(" layer:%d keycode:0x%04x\n", curLayer, k);
 }
 
 void matrixRelease(uint16_t keycode) {
+  // TODO mod release
   uint8_t k;
   uint8_t mediaReport[2] = {0, 0};
+  Serial.printf("\nat matrixTick:%d matrixRelease(0x%04x)\n", matrixTick,
+                keycode);
   if (keycode & 0x8000) {
     curLayer = 0;
   }
@@ -160,7 +174,7 @@ void matrixRelease(uint16_t keycode) {
   } else {
     for (uint8_t i = 0; i < 6; i++) {
       if (0 != k && report.keys[i] == k) {
-        report.keys[i] = 0x00;
+        releaseReport.keys[i] = k;
       }
     }
   }
@@ -201,13 +215,15 @@ void matrixProces() {
           break;
         case KS_TAP:
           if (keyEvents[row][col].pressed == 0) {
-            keyEvents[row][col].state = KS_UP;
-            // Serial.printf("write %d\n", keycode);
+            keyEvents[row][col].state = KS_RELASE;
+            Serial.printf("write %d\n", keycode);
             matrixPress(keycode, 0);
-            delay(1);
-            matrixRelease(keycode);
           }
           break;
+        case KS_RELASE: {
+          matrixRelease(keycode);
+          keyEvents[row][col].state = KS_UP;
+        } break;
         default:
           Serial.println(
               "Upss.. wrong keyEvents[row][col].state in matrixProcess()");
@@ -246,7 +262,7 @@ void setup() {
   Serial.begin(115200);
   Serial.println("Starting MMK");
   EEPROM.begin(4);
-  uint16_t deviceChose = EEPROM.read(0);
+  deviceChose = EEPROM.read(0);
   esp_base_mac_addr_set(&MACAddress[deviceChose][0]);
   bleKeyboard.setName(GATTS_TAG);
   bleKeyboard.begin();
@@ -265,8 +281,17 @@ void loop(void) {
   if ((msec - lsec) > uint64_t(100000)) {  // every 1 mili second
     lsec = msec;
     tmOut++;
-    if (reportReady) {
+    if (reportReady > 0) {
       bleKeyboard.sendReport(&report);
+      for (uint8_t i = 0; i < 6; i++) {
+        if (report.keys[i] == releaseReport.keys[i]) {
+          releaseReport.keys[i] = 0x00;
+          report.keys[i] = 0x00;
+        }
+      }
+      delay(1);
+      bleKeyboard.sendReport(&report);
+      reportReady = 0;
     }
     if (powerSave == 2) {
       powerSave = 0;
