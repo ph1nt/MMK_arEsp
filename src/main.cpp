@@ -167,11 +167,17 @@ void matrixRelease(uint16_t keycode) {
   if (keycode & 0x8000) {
     curLayer = 0;
   }
-  k = (keycode & 0x00FF);
+  return;
   if (keycode & 0x4000) {
     mediaReport[0] = (1 << ((keycode & 0x00FF) - 0x0C));
     bleKeyboard.release(mediaReport);
   } else {
+    if (keycode & 0x1F00) {
+      report.modifiers &= ~((keycode & 0x0F00) >> (4 + 4 * (keycode & 0x1000)));
+      Serial.printf("release modifier 0x%02x and key 0x%02x\n",
+                    (keycode & 0x1F00) >> 8, (keycode & 0x00FF));
+    }
+    k = (keycode & 0x00FF);
     for (uint8_t i = 0; i < 6; i++) {
       if (0 != k && report.keys[i] == k) {
         releaseReport.keys[i] = k;
@@ -263,6 +269,10 @@ void setup() {
   Serial.println("Starting MMK");
   EEPROM.begin(4);
   deviceChose = EEPROM.read(0);
+  if (deviceChose > 2) {
+    deviceChose = 0;
+    EEPROM.write(0, deviceChose);
+  }
   esp_base_mac_addr_set(&MACAddress[deviceChose][0]);
   bleKeyboard.setName(GATTS_TAG);
   bleKeyboard.begin();
