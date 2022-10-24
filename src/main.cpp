@@ -144,6 +144,9 @@ void matrixPress(uint16_t keycode, uint8_t _hold) {
                         (keycode & 0x1F00) >> 8, (keycode & 0x00FF));
         } else {
           k = (keycode & 0x00FF);
+          if ((keycode >= KC_LCTRL) && (keycode <= KC_RGUI)) {
+            report.modifiers |= (1 >> (keycode - KC_LCTRL));
+          }
         }
       }
     }
@@ -187,6 +190,9 @@ void matrixRelease(uint16_t keycode) {
     for (uint8_t i = 0; i < 6; i++) {
       if (0 != k && report.keys[i] == k) {
         releaseReport.keys[i] = k;
+        if ((keycode >= KC_LCTRL) && (keycode <= KC_RGUI)) {
+          report.modifiers &= (1 >> (keycode - KC_LCTRL));
+        }
       }
       Serial.printf("0x%04x ", releaseReport.keys[i]);
     }
@@ -214,6 +220,10 @@ void matrixProces() {
               keyEvents[row][col].state = KS_HOLD;
               // Serial.printf("press %d 0x%04x .. ", keycode,
               // keyMap[curLayer][row][col]);
+              if ((keycode >= BT_1) && (keycode <= BT_3)) {
+                changeID(keycode -
+                         BT_1);  // reboot to select diffrent BT device
+              }
               matrixPress(keycode, 1);
             } else {
               keyEvents[row][col].state = KS_TAP;
@@ -261,14 +271,12 @@ void keyboardSetup() {
 // Task for continually scaning keyboard
 void keyboardTask(void *pvParameters) {
   while (1) {
-    if (powerSave == 0) {
-      matrixScan();
-      matrixProces();
-      if (matrixChange == 1) {
-        matrixChange = 0;
-        tmOut = 0;
-        if (powerSave == 1) powerSave++;
-      }
+    matrixScan();
+    matrixProces();
+    if (matrixChange == 1) {
+      matrixChange = 0;
+      tmOut = 0;
+      if (powerSave == 1) powerSave++;
     }
     vTaskDelay(1 / portTICK_PERIOD_MS);
   }
@@ -378,7 +386,7 @@ void setup() {
 void loop(void) {
   msec = esp_timer_get_time();
   fps++;
-  if ((msec - lsec) > uint64_t(100000)) {  // every 1 mili second
+  if ((msec - lsec) > uint64_t(100000)) {  // every 0.1 mili second
     lsec = msec;
     tmOut++;
     if (reportReady > 0) {
@@ -393,29 +401,31 @@ void loop(void) {
       bleKeyboard.sendReport(&report);
       reportReady = 0;
     }
-    if (powerSave == 2) {
+    if ((powerSave == 2) || ((powerSave == 1) && (tmOut == 1))) {
       powerSave = 0;
       u8x8.setPowerSave(powerSave);
+      Serial.println("Display on");
     }
-    if (powerSave == 0) {
-      if (tmOut > SLEEP_DELAY) {
+    if (tmOut > SLEEP_DISPLAY) {
+      // Serial.printf("tmOut:%d\n", tmOut);
+      if (powerSave != 1) {
         powerSave = 1;
         u8x8.setPowerSave(powerSave);
+        Serial.println("Display off");
+      }
+      if (tmOut > SLEEP_CPU) {
         rtc_matrix_setup();
-        // esp_sleep_enable_touchpad_wakeup();
-        // esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_ON);
         Serial.println("Going to sleep now");
         Serial.flush();
         delay(1000);
-        esp_light_sleep_start();
+        // esp_light_sleep_start();
         esp_restart();
         rtc_matrix_deinit();
         powerSave = 2;
-        Serial.println("This will never be printed");
-      } else {
-        drawOled();
       }
-      fps = 0;
+    } else {
+      drawOled();
     }
+    fps = 0;
   }
 }  // TODO pin35 encoder wakeup

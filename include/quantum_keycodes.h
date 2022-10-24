@@ -495,6 +495,10 @@ enum quantum_keycodes {
   // Additional magic key
   MAGIC_TOGGLE_GUI,
 
+  // Select bluetooth device
+  BT_1,
+  BT_2,
+  BT_3,
   // Start of custom keycode range for keyboards and keymaps - always leave at
   // the end
   SAFE_RANGE
