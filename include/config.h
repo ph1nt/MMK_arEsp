@@ -75,8 +75,8 @@ typedef struct {
   bool pressed;
   bool curState;
   uint8_t state;
-  uint16_t time_debounce;
-  uint16_t time_press;
+  uint64_t time_debounce;
+  uint64_t time_press;
 } keyevent_t;
 
 uint16_t deviceChose;

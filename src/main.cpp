@@ -145,7 +145,9 @@ void matrixPress(uint16_t keycode, uint8_t _hold) {
         } else {
           k = (keycode & 0x00FF);
           if ((keycode >= KC_LCTRL) && (keycode <= KC_RGUI)) {
-            report.modifiers |= (1 >> (keycode - KC_LCTRL));
+            report.modifiers |= (1 << (keycode - KC_LCTRL));
+            Serial.printf("report.modifiers |= 0x%04x, keycode 0x%04x\n",
+                          (1 << (keycode - KC_LCTRL)), keycode);
           }
         }
       }
@@ -190,11 +192,13 @@ void matrixRelease(uint16_t keycode) {
     for (uint8_t i = 0; i < 6; i++) {
       if (0 != k && report.keys[i] == k) {
         releaseReport.keys[i] = k;
-        if ((keycode >= KC_LCTRL) && (keycode <= KC_RGUI)) {
-          report.modifiers &= (1 >> (keycode - KC_LCTRL));
-        }
       }
       Serial.printf("0x%04x ", releaseReport.keys[i]);
+    }
+    if ((keycode >= KC_LCTRL) && (keycode <= KC_RGUI)) {
+      report.modifiers &= !(1 << (keycode - KC_LCTRL));
+      Serial.printf("report.modifiers &= 0x%04x, keycode 0x%04x\n",
+                    (1 << (keycode - KC_LCTRL)), keycode);
     }
     Serial.printf("mod:0x%04x\n", report.modifiers);
   }
@@ -214,9 +218,9 @@ void matrixProces() {
           }
           break;
         case KS_DOWN:
-          if (matrixTick >
-              uint32_t(keyEvents[row][col].time_press + MODTAP_TIME)) {
-            if (keyEvents[row][col].pressed == 1) {
+          if (keyEvents[row][col].pressed == 1) {
+            if (matrixTick >
+                uint64_t(keyEvents[row][col].time_press + MODTAP_TIME)) {
               keyEvents[row][col].state = KS_HOLD;
               // Serial.printf("press %d 0x%04x .. ", keycode,
               // keyMap[curLayer][row][col]);
@@ -225,9 +229,9 @@ void matrixProces() {
                          BT_1);  // reboot to select diffrent BT device
               }
               matrixPress(keycode, 1);
-            } else {
-              keyEvents[row][col].state = KS_TAP;
             }
+          } else {
+            keyEvents[row][col].state = KS_TAP;
           }
           break;
         case KS_HOLD:
@@ -238,11 +242,9 @@ void matrixProces() {
           }
           break;
         case KS_TAP:
-          if (keyEvents[row][col].pressed == 0) {
-            keyEvents[row][col].state = KS_RELASE;
-            Serial.printf("write %d\n", keycode);
-            matrixPress(keycode, 0);
-          }
+          keyEvents[row][col].state = KS_RELASE;
+          Serial.printf("write %d\n", keycode);
+          matrixPress(keycode, 0);
           break;
         case KS_RELASE: {
           matrixRelease(keycode);
@@ -418,7 +420,7 @@ void loop(void) {
         Serial.println("Going to sleep now");
         Serial.flush();
         delay(1000);
-        // esp_light_sleep_start();
+        esp_light_sleep_start();
         esp_restart();
         rtc_matrix_deinit();
         powerSave = 2;
