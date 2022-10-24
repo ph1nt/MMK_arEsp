@@ -6,6 +6,26 @@
 #include <keycode.h>
 #include <quantum_keycodes.h>
 
+#include "driver/gpio.h"
+#include "driver/rtc_io.h"
+#include "driver/touch_pad.h"
+#include "esp32/ulp.h"
+#include "esp_bt.h"
+#include "esp_bt_main.h"
+#include "esp_event.h"
+#include "esp_log.h"
+#include "esp_pm.h"
+#include "esp_sleep.h"
+#include "esp_system.h"
+#include "esp_timer.h"
+#include "esp_wifi.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/event_groups.h"
+#include "freertos/task.h"
+#include "nvs_flash.h"
+#include "soc/rtc.h"
+#include "soc/rtc_cntl_reg.h"
+
 #define MODULE_ID "LOLIN 32"
 #define GATTS_TAG "MMK V0.5"  // The device's name
 #define MAX_BT_DEVICENAME_LENGTH 40
@@ -24,8 +44,8 @@
 #define OLED_SDA_PIN GPIO_NUM_32
 #define OLED_SCL_PIN GPIO_NUM_33
 
-/*Battery monitoring
- * Please read check battery_monitor.h for resistor values before applying
+/* Battery monitoring
+ * resistor divider 91k/91k
  * use ADC1 only,  */
 #define Vout_min 3.00
 #define Vout_max 4.10
@@ -33,7 +53,7 @@
 
 const gpio_num_t rowPins[] = {GPIO_NUM_5, GPIO_NUM_18, GPIO_NUM_23,
                               GPIO_NUM_19};
-const gpio_num_t colPins[] = {
+const gpio_num_t colPins[] = {  // TODO swap 5 & 4
     GPIO_NUM_13, GPIO_NUM_15, GPIO_NUM_2,  GPIO_NUM_34, GPIO_NUM_4,
     GPIO_NUM_25, GPIO_NUM_26, GPIO_NUM_27, GPIO_NUM_14, GPIO_NUM_12};
 
@@ -103,17 +123,17 @@ uint16_t keyMap[MATRIX_LAYERS][MATRIX_ROWS][MATRIX_COLS] = {
       KC_ENTER},
      {KC_F11, KC_F12, KC_F13, KC_F14, KC_F15, KC_F6, KC_F7, KC_F8, KC_F9,
       KC_F10},
-     {NUM, KC_LCTRL, KC_LALT, LOWER, KC_NO, KC_BSLS, KC_NO, RAISE, KC_ENTER,
-      KC_LGUI}},
+     {NUM, KC_LCTRL, KC_LALT, KC_NO, LOWER, KC_SPACE, KC_NO, RAISE, ENT_SFT,
+      LGUI_ESC}},
     {{KC_1, KC_2, KC_3, KC_4, KC_5, KC_6, KC_7, KC_8, KC_9, KC_0},
      {KC_F1, KC_F2, KC_F3, KC_F4, KC_F5, KC_LEFT, KC_DOWN, KC_UP, KC_RIGHT,
       KC_ENTER},
      {KC_F11, KC_F12, KC_F13, KC_F14, KC_F15, KC_F6, KC_F7, KC_F8, KC_F9,
       KC_F10},
-     {NUM, KC_LCTRL, KC_LALT, LOWER, KC_NO, KC_BSLS, KC_NO, RAISE, KC_ENTER,
-      KC_LGUI}},
+     {NUM, KC_LCTRL, KC_LALT, KC_NO, LOWER, KC_SPACE, KC_NO, RAISE, ENT_SFT,
+      LGUI_ESC}},
     {{KC_GRV, KC_3, KC_4, KC_5, KC_6, KC_7, KC_8, KC_9, KC_0, KC_BSPC},
      {KC_ESC, KC_E, KC_R, KC_T, KC_Y, KC_U, KC_I, KC_O, KC_P, KC_BSPC},
      {KC_TAB, KC_D, KC_F, KC_G, KC_H, KC_J, KC_L, KC_K, KC_SCLN, KC_QUOT},
-     {NUM, KC_LCTRL, KC_LALT, LOWER, KC_NO, KC_BSLS, KC_NO, RAISE, KC_ENTER,
-      KC_LGUI}}};
+     {NUM, KC_LCTRL, KC_LALT, KC_NO, LOWER, KC_SPACE, KC_NO, RAISE, ENT_SFT,
+      LGUI_ESC}}};

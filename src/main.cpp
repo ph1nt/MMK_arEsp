@@ -76,6 +76,12 @@ void matrixSetup(void) {
     gpio_pulldown_en(colPins[col]);
     gpio_set_pull_mode(colPins[col], GPIO_PULLDOWN_ONLY);
   }
+  gpio_pad_select_gpio(ENCODER_A_PIN);
+  gpio_set_direction(ENCODER_A_PIN, GPIO_MODE_INPUT);
+  gpio_set_pull_mode(ENCODER_A_PIN, GPIO_PULLUP_ONLY);
+  gpio_pad_select_gpio(ENCODER_B_PIN);
+  gpio_set_direction(ENCODER_B_PIN, GPIO_MODE_INPUT);
+  gpio_set_pull_mode(ENCODER_B_PIN, GPIO_PULLUP_ONLY);
 }
 
 // Scanning physical keys matrix
@@ -104,7 +110,7 @@ void matrixScan() {
 void matrixPress(uint16_t keycode, uint8_t _hold) {
   uint8_t k = 0;
   uint8_t mediaReport[2] = {0, 0};
-  Serial.printf("\nat matrixTick:%d matrixPress(0x%04x, %d)\n", matrixTick,
+  Serial.printf("\nat matrixTick:%lld matrixPress(0x%04x, %d)\n", matrixTick,
                 keycode, _hold);
   if (keycode & 0x8000) {
     if (_hold) {
@@ -162,15 +168,15 @@ void matrixRelease(uint16_t keycode) {
   // TODO mod release
   uint8_t k;
   uint8_t mediaReport[2] = {0, 0};
-  Serial.printf("\nat matrixTick:%d matrixRelease(0x%04x)\n", matrixTick,
+  Serial.printf("\nat matrixTick:%lld matrixRelease(0x%04x)\n", matrixTick,
                 keycode);
   if (keycode & 0x8000) {
     curLayer = 0;
   }
-  return;
   if (keycode & 0x4000) {
     mediaReport[0] = (1 << ((keycode & 0x00FF) - 0x0C));
     bleKeyboard.release(mediaReport);
+    return;
   } else {
     if (keycode & 0x1F00) {
       report.modifiers &= ~((keycode & 0x0F00) >> (4 + 4 * (keycode & 0x1000)));
@@ -182,7 +188,9 @@ void matrixRelease(uint16_t keycode) {
       if (0 != k && report.keys[i] == k) {
         releaseReport.keys[i] = k;
       }
+      Serial.printf("0x%04x ", releaseReport.keys[i]);
     }
+    Serial.printf("mod:0x%04x\n", report.modifiers);
   }
 }
 
@@ -253,19 +261,101 @@ void keyboardSetup() {
 // Task for continually scaning keyboard
 void keyboardTask(void *pvParameters) {
   while (1) {
-    matrixScan();
-    matrixProces();
-    if (matrixChange == 1) {
-      matrixChange = 0;
-      tmOut = 0;
-      if (powerSave == 1) powerSave++;
+    if (powerSave == 0) {
+      matrixScan();
+      matrixProces();
+      if (matrixChange == 1) {
+        matrixChange = 0;
+        tmOut = 0;
+        if (powerSave == 1) powerSave++;
+      }
     }
     vTaskDelay(1 / portTICK_PERIOD_MS);
   }
 }
 
+void print_wakeup_reason() {
+  esp_sleep_wakeup_cause_t wakeup_reason;
+  wakeup_reason = esp_sleep_get_wakeup_cause();
+  switch (wakeup_reason) {
+    case ESP_SLEEP_WAKEUP_EXT0:
+      Serial.println("Wakeup caused by external signal using RTC_IO");
+      break;
+    case ESP_SLEEP_WAKEUP_EXT1:
+      Serial.println("Wakeup caused by external signal using RTC_CNTL");
+      break;
+    case ESP_SLEEP_WAKEUP_TIMER:
+      Serial.println("Wakeup caused by timer");
+      break;
+    case ESP_SLEEP_WAKEUP_TOUCHPAD:
+      Serial.println("Wakeup caused by touchpad");
+      break;
+    case ESP_SLEEP_WAKEUP_ULP:
+      Serial.println("Wakeup caused by ULP program");
+      break;
+    default:
+      Serial.printf("Wakeup was not caused by deep sleep: %d\n", wakeup_reason);
+      break;
+  }
+}
+
+// deinitializing rtc matrix pins on  deep sleep wake up
+void rtc_matrix_deinit(void) {
+  // Deinitializing columns
+  for (uint8_t col = 0; col < MATRIX_COLS; col++) {
+    if (rtc_gpio_is_valid_gpio(colPins[col]) == 1) {
+      rtc_gpio_set_level(colPins[col], 0);
+      rtc_gpio_set_direction(colPins[col], RTC_GPIO_MODE_DISABLED);
+      gpio_reset_pin(colPins[col]);
+    }
+  }
+  // Deinitializing rows
+  for (uint8_t row = 0; row < MATRIX_ROWS; row++) {
+    if (rtc_gpio_is_valid_gpio(rowPins[row]) == 1) {
+      rtc_gpio_set_level(rowPins[row], 0);
+      rtc_gpio_set_direction(rowPins[row], RTC_GPIO_MODE_DISABLED);
+      gpio_reset_pin(rowPins[row]);
+    }
+  }
+}
+
+// Initializing rtc matrix pins for deep sleep wake up
+void rtc_matrix_setup(void) {
+  uint64_t rtc_mask = 0;
+  // Initializing columns
+  for (uint8_t row = 0; row < MATRIX_ROWS; row++) {
+    if (rtc_gpio_is_valid_gpio(rowPins[row]) == 1) {
+      rtc_gpio_init((rowPins[row]));
+      rtc_gpio_set_direction(rowPins[row], RTC_GPIO_MODE_INPUT_OUTPUT);
+      rtc_gpio_set_drive_capability(rowPins[row], GPIO_DRIVE_CAP_0);
+      rtc_gpio_set_level(rowPins[row], 1);
+      ESP_LOGI(GPIO_TAG, "%d is level %d", rowPins[row],
+               gpio_get_level(rowPins[row]));
+    } else {
+      digitalWrite(rowPins[row], 1);
+      esp_sleep_enable_gpio_wakeup();
+    }
+  }
+  // Initializing rows
+  for (uint8_t col = 0; col < MATRIX_COLS; col++) {
+    if (rtc_gpio_is_valid_gpio(colPins[col]) == 1) {
+      rtc_gpio_init((colPins[col]));
+      rtc_gpio_set_direction(colPins[col], RTC_GPIO_MODE_INPUT_OUTPUT);
+      rtc_gpio_set_level(colPins[col], 0);
+      rtc_gpio_wakeup_enable(colPins[col], GPIO_INTR_HIGH_LEVEL);
+      SET_BIT(rtc_mask, colPins[col]);
+      ESP_LOGI(GPIO_TAG, "%d is level %d", colPins[col],
+               gpio_get_level(colPins[col]));
+    }
+    esp_sleep_enable_ext1_wakeup(rtc_mask, ESP_EXT1_WAKEUP_ANY_HIGH);
+  }
+}
+
 void setup() {
+  rtc_matrix_deinit();
   Serial.begin(115200);
+  delay(1000);
+  print_wakeup_reason();
   Serial.println("Starting MMK");
   EEPROM.begin(4);
   deviceChose = EEPROM.read(0);
@@ -311,13 +401,21 @@ void loop(void) {
       if (tmOut > SLEEP_DELAY) {
         powerSave = 1;
         u8x8.setPowerSave(powerSave);
+        rtc_matrix_setup();
+        // esp_sleep_enable_touchpad_wakeup();
+        // esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_ON);
+        Serial.println("Going to sleep now");
+        Serial.flush();
+        delay(1000);
+        esp_light_sleep_start();
+        esp_restart();
+        rtc_matrix_deinit();
+        powerSave = 2;
+        Serial.println("This will never be printed");
       } else {
         drawOled();
       }
       fps = 0;
     }
   }
-  // bleKeyboard.write(KEY_MEDIA_PLAY_PAUSE);
-  // bleKeyboard.press(KEY_LEFT_CTRL);
-  // bleKeyboard.releaseAll();
-}
+}  // TODO pin35 encoder wakeup
