@@ -5,6 +5,7 @@
 #include <action_code.h>
 #include <keycode.h>
 #include <quantum_keycodes.h>
+#include <stdio.h>
 
 #include "driver/gpio.h"
 #include "driver/rtc_io.h"
@@ -23,8 +24,10 @@
 #include "freertos/event_groups.h"
 #include "freertos/task.h"
 #include "nvs_flash.h"
+#include "rom/ets_sys.h"
 #include "soc/rtc.h"
 #include "soc/rtc_cntl_reg.h"
+#include "soc/sens_reg.h"
 
 #define MODULE_ID "LOLIN 32"
 #define GATTS_TAG "MMK V0.5"  // The device's name
@@ -52,10 +55,20 @@
 #define Vout_max 4.10
 #define BATT_PIN 35  // gpio pin 35
 
-const gpio_num_t rowPins[] = {GPIO_NUM_5, GPIO_NUM_18, GPIO_NUM_23,
+// Internal esp32 temperature sensor
+#ifdef __cplusplus
+extern "C" {
+#endif
+uint8_t temprature_sens_read();
+#ifdef __cplusplus
+}
+#endif
+uint8_t temprature_sens_read();
+
+const gpio_num_t rowPins[] = {GPIO_NUM_4, GPIO_NUM_18, GPIO_NUM_23,
                               GPIO_NUM_19};
 const gpio_num_t colPins[] = {  // TODO swap 5 & 4
-    GPIO_NUM_13, GPIO_NUM_15, GPIO_NUM_2,  GPIO_NUM_34, GPIO_NUM_4,
+    GPIO_NUM_13, GPIO_NUM_15, GPIO_NUM_2,  GPIO_NUM_34, GPIO_NUM_5,
     GPIO_NUM_25, GPIO_NUM_26, GPIO_NUM_27, GPIO_NUM_14, GPIO_NUM_12};
 
 #define maxBTdev 3
@@ -123,7 +136,7 @@ uint16_t keyMap[MATRIX_LAYERS][MATRIX_ROWS][MATRIX_COLS] = {
       LOWER}},
     // LOWER
     {{KC_NO, KC_NO, KC_NO, KC_NO, KC_NO, KC_NO, KC_NO, KC_NO, KC_NO, KC_NO},
-     {KC_NO, KC_NO, KC_NO, KC_NO, KC_NO, KC_NO, KC_NO, KC_NO, KC_NO, KC_NO},
+     {KC_NO, DEBUG, KC_NO, KC_NO, KC_NO, KC_NO, KC_NO, KC_NO, KC_NO, KC_NO},
      {KC_NO, KC_NO, KC_NO, KC_NO, KC_NO, KC_NO, KC_NO, BT_1, BT_2, BT_3},
      {NUM, KC_LCTL, KC_LGUI, XXXXX, ENT_SFT, SPC_ALT, XXXXX, RAISE, KC_RGUI,
       LOWER}},

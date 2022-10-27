@@ -18,7 +18,58 @@ uint32_t getBatteryLevel(void) {
   return battery_percent;
 }
 
-uint16_t fps, tmOut = 0;
+uint16_t fps, tmOut, sleepDebug = 0;
+
+// deinitializing rtc matrix pins on  deep sleep wake up
+void rtc_matrix_deinit(void) {
+  // Deinitializing columns
+  for (uint8_t col = 0; col < MATRIX_COLS; col++) {
+    if (rtc_gpio_is_valid_gpio(colPins[col]) == 1) {
+      rtc_gpio_set_level(colPins[col], 0);
+      rtc_gpio_set_direction(colPins[col], RTC_GPIO_MODE_DISABLED);
+      gpio_reset_pin(colPins[col]);
+    }
+  }
+  // Deinitializing rows
+  for (uint8_t row = 0; row < MATRIX_ROWS; row++) {
+    if (rtc_gpio_is_valid_gpio(rowPins[row]) == 1) {
+      rtc_gpio_set_level(rowPins[row], 0);
+      rtc_gpio_set_direction(rowPins[row], RTC_GPIO_MODE_DISABLED);
+      gpio_reset_pin(rowPins[row]);
+    }
+  }
+}
+
+// Initializing rtc matrix pins for deep sleep wake up
+void rtc_matrix_setup(void) {
+  uint64_t rtc_mask = 0;
+  // Initializing columns
+  for (uint8_t row = 0; row < MATRIX_ROWS; row++) {
+    if (rtc_gpio_is_valid_gpio(rowPins[row]) == 1) {
+      rtc_gpio_init((rowPins[row]));
+      rtc_gpio_set_direction(rowPins[row], RTC_GPIO_MODE_INPUT_OUTPUT);
+      rtc_gpio_set_drive_capability(rowPins[row], GPIO_DRIVE_CAP_0);
+      rtc_gpio_set_level(rowPins[row], 1);
+
+    } else {
+      digitalWrite(rowPins[row], 1);
+      esp_sleep_enable_gpio_wakeup();
+    }
+  }
+  // Initializing rows
+  for (uint8_t col = 0; col < MATRIX_COLS; col++) {
+    if (rtc_gpio_is_valid_gpio(colPins[col]) == 1) {
+      rtc_gpio_init((colPins[col]));
+      rtc_gpio_set_direction(colPins[col], RTC_GPIO_MODE_INPUT_OUTPUT);
+      rtc_gpio_set_level(colPins[col], 0);
+      rtc_gpio_wakeup_enable(colPins[col], GPIO_INTR_HIGH_LEVEL);
+      SET_BIT(rtc_mask, colPins[col]);
+    } else {
+      gpio_wakeup_enable(colPins[col], GPIO_INTR_HIGH_LEVEL);
+    }
+    esp_sleep_enable_ext1_wakeup(rtc_mask, ESP_EXT1_WAKEUP_ANY_HIGH);
+  }
+}
 
 void drawOled() {
   u8x8.clearBuffer();
@@ -228,6 +279,9 @@ void matrixProces() {
                 changeID(keycode -
                          BT_1);  // reboot to select diffrent BT device
               }
+              if (keycode == DEBUG) {
+                sleepDebug = 1;
+              }
               matrixPress(keycode, 1);
             }
           } else {
@@ -273,7 +327,9 @@ void keyboardSetup() {
 // Task for continually scaning keyboard
 void keyboardTask(void *pvParameters) {
   while (1) {
-    matrixScan();
+    if (sleepDebug == 0) {
+      matrixScan();
+    }
     matrixProces();
     if (matrixChange == 1) {
       matrixChange = 0;
@@ -309,56 +365,22 @@ void print_wakeup_reason() {
   }
 }
 
-// deinitializing rtc matrix pins on  deep sleep wake up
-void rtc_matrix_deinit(void) {
-  // Deinitializing columns
-  for (uint8_t col = 0; col < MATRIX_COLS; col++) {
-    if (rtc_gpio_is_valid_gpio(colPins[col]) == 1) {
-      rtc_gpio_set_level(colPins[col], 0);
-      rtc_gpio_set_direction(colPins[col], RTC_GPIO_MODE_DISABLED);
-      gpio_reset_pin(colPins[col]);
-    }
-  }
-  // Deinitializing rows
-  for (uint8_t row = 0; row < MATRIX_ROWS; row++) {
-    if (rtc_gpio_is_valid_gpio(rowPins[row]) == 1) {
-      rtc_gpio_set_level(rowPins[row], 0);
-      rtc_gpio_set_direction(rowPins[row], RTC_GPIO_MODE_DISABLED);
-      gpio_reset_pin(rowPins[row]);
-    }
-  }
-}
-
-// Initializing rtc matrix pins for deep sleep wake up
-void rtc_matrix_setup(void) {
-  uint64_t rtc_mask = 0;
-  // Initializing columns
-  for (uint8_t row = 0; row < MATRIX_ROWS; row++) {
-    if (rtc_gpio_is_valid_gpio(rowPins[row]) == 1) {
-      rtc_gpio_init((rowPins[row]));
-      rtc_gpio_set_direction(rowPins[row], RTC_GPIO_MODE_INPUT_OUTPUT);
-      rtc_gpio_set_drive_capability(rowPins[row], GPIO_DRIVE_CAP_0);
-      rtc_gpio_set_level(rowPins[row], 1);
-      ESP_LOGI(GPIO_TAG, "%d is level %d", rowPins[row],
-               gpio_get_level(rowPins[row]));
-    } else {
-      digitalWrite(rowPins[row], 1);
-      esp_sleep_enable_gpio_wakeup();
-    }
-  }
-  // Initializing rows
-  for (uint8_t col = 0; col < MATRIX_COLS; col++) {
-    if (rtc_gpio_is_valid_gpio(colPins[col]) == 1) {
-      rtc_gpio_init((colPins[col]));
-      rtc_gpio_set_direction(colPins[col], RTC_GPIO_MODE_INPUT_OUTPUT);
-      rtc_gpio_set_level(colPins[col], 0);
-      rtc_gpio_wakeup_enable(colPins[col], GPIO_INTR_HIGH_LEVEL);
-      SET_BIT(rtc_mask, colPins[col]);
-      ESP_LOGI(GPIO_TAG, "%d is level %d", colPins[col],
-               gpio_get_level(colPins[col]));
-    }
-    esp_sleep_enable_ext1_wakeup(rtc_mask, ESP_EXT1_WAKEUP_ANY_HIGH);
-  }
+float tempCpu() {
+  SET_PERI_REG_BITS(SENS_SAR_MEAS_WAIT2_REG, SENS_FORCE_XPD_SAR, 3,
+                    SENS_FORCE_XPD_SAR_S);
+  SET_PERI_REG_BITS(SENS_SAR_TSENS_CTRL_REG, SENS_TSENS_CLK_DIV, 10,
+                    SENS_TSENS_CLK_DIV_S);
+  CLEAR_PERI_REG_MASK(SENS_SAR_TSENS_CTRL_REG, SENS_TSENS_POWER_UP);
+  CLEAR_PERI_REG_MASK(SENS_SAR_TSENS_CTRL_REG, SENS_TSENS_DUMP_OUT);
+  SET_PERI_REG_MASK(SENS_SAR_TSENS_CTRL_REG, SENS_TSENS_POWER_UP_FORCE);
+  SET_PERI_REG_MASK(SENS_SAR_TSENS_CTRL_REG, SENS_TSENS_POWER_UP);
+  ets_delay_us(100);
+  SET_PERI_REG_MASK(SENS_SAR_TSENS_CTRL_REG, SENS_TSENS_DUMP_OUT);
+  ets_delay_us(5);
+  float temp_f = (float)GET_PERI_REG_BITS2(SENS_SAR_SLAVE_ADDR3_REG,
+                                           SENS_TSENS_OUT, SENS_TSENS_OUT_S);
+  float temp_c = (temp_f - 32) / 1.8;
+  return temp_c;
 }
 
 void setup() {
@@ -403,24 +425,31 @@ void loop(void) {
       bleKeyboard.sendReport(&report);
       reportReady = 0;
     }
+    if ((tmOut % 11) == 0) {
+      Serial.printf("Temp:%0.1f°C\n", tempCpu());
+    }
     if ((powerSave == 2) || ((powerSave == 1) && (tmOut == 1))) {
       powerSave = 0;
       u8x8.setPowerSave(powerSave);
       Serial.println("Display on");
     }
-    if (tmOut > SLEEP_DISPLAY) {
+    if ((tmOut > SLEEP_DISPLAY) || (sleepDebug == 1)) {
       // Serial.printf("tmOut:%d\n", tmOut);
       if (powerSave != 1) {
         powerSave = 1;
         u8x8.setPowerSave(powerSave);
         Serial.println("Display off");
       }
-      if (tmOut > SLEEP_CPU) {
+      if ((tmOut > SLEEP_CPU) || (sleepDebug == 1)) {
+        sleepDebug = 0;
         rtc_matrix_setup();
         Serial.println("Going to sleep now");
         Serial.flush();
         delay(1000);
-        esp_light_sleep_start();
+        // gpio_deep_sleep_hold_en();
+        // esp_light_sleep_start();
+        esp_deep_sleep_start();
+        Serial.println("Wake up from sleep");
         esp_restart();
         rtc_matrix_deinit();
         powerSave = 2;
