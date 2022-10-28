@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <BleKeyboard.h>
 #include <EEPROM.h>
+#include <ESP32Time.h>
 #include <U8g2lib.h>
 #include <action_code.h>
 #include <keycode.h>
@@ -55,16 +56,6 @@
 #define Vout_max 4.10
 #define BATT_PIN 35  // gpio pin 35
 
-// Internal esp32 temperature sensor
-#ifdef __cplusplus
-extern "C" {
-#endif
-uint8_t temprature_sens_read();
-#ifdef __cplusplus
-}
-#endif
-uint8_t temprature_sens_read();
-
 const gpio_num_t rowPins[] = {GPIO_NUM_4, GPIO_NUM_18, GPIO_NUM_23,
                               GPIO_NUM_19};
 const gpio_num_t colPins[] = {  // TODO swap 5 & 4
@@ -91,6 +82,12 @@ typedef struct {
   uint64_t time_debounce;
   uint64_t time_press;
 } keyevent_t;
+
+// ESP32Time rtc;
+ESP32Time rtc(7200);  // offset in seconds GMT+2
+
+const char* devs[3] = {"iPad", "MBP", "iMac"};
+const char* layers[4] = {"default", "Symbol", "Number", "Funct."};
 
 uint16_t deviceChose;
 // Define matrix

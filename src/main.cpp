@@ -18,6 +18,25 @@ uint32_t getBatteryLevel(void) {
   return battery_percent;
 }
 
+// Returns ESP32 core temperature in celcius degrees
+float tempCpu() {
+  SET_PERI_REG_BITS(SENS_SAR_MEAS_WAIT2_REG, SENS_FORCE_XPD_SAR, 3,
+                    SENS_FORCE_XPD_SAR_S);
+  SET_PERI_REG_BITS(SENS_SAR_TSENS_CTRL_REG, SENS_TSENS_CLK_DIV, 10,
+                    SENS_TSENS_CLK_DIV_S);
+  CLEAR_PERI_REG_MASK(SENS_SAR_TSENS_CTRL_REG, SENS_TSENS_POWER_UP);
+  CLEAR_PERI_REG_MASK(SENS_SAR_TSENS_CTRL_REG, SENS_TSENS_DUMP_OUT);
+  SET_PERI_REG_MASK(SENS_SAR_TSENS_CTRL_REG, SENS_TSENS_POWER_UP_FORCE);
+  SET_PERI_REG_MASK(SENS_SAR_TSENS_CTRL_REG, SENS_TSENS_POWER_UP);
+  ets_delay_us(100);
+  SET_PERI_REG_MASK(SENS_SAR_TSENS_CTRL_REG, SENS_TSENS_DUMP_OUT);
+  ets_delay_us(5);
+  float temp_f = (float)GET_PERI_REG_BITS2(SENS_SAR_SLAVE_ADDR3_REG,
+                                           SENS_TSENS_OUT, SENS_TSENS_OUT_S);
+  float temp_c = (temp_f - 32) / 1.8;
+  return temp_c;
+}
+
 uint16_t fps, tmOut, sleepDebug = 0;
 
 // deinitializing rtc matrix pins on  deep sleep wake up
@@ -71,31 +90,43 @@ void rtc_matrix_setup(void) {
   }
 }
 
+#define Xpos(_col) (6 * _col)
+#define Ypos(_row) (12 * _row)
+#define posY(_row) (127 - Ypos(_row))
 void drawOled() {
   u8x8.clearBuffer();
   u8x8.setFont(u8g2_font_5x7_tf);
   u8x8.drawStr(0, 8, "FPS");
   u8x8.drawStr(0, 16, String(fps).c_str());
   bleKeyboard.setBatteryLevel(getBatteryLevel());
-  u8x8.setFont(u8g2_font_12x6LED_tr);
-  u8x8.drawStr(0, 127, String(getBatteryVoltage()).c_str());
-  u8x8.drawStr(22, 127, "V");
+  if (curLayer == 0) {
+    u8x8.setFont(u8g2_font_4x6_tf);
+  }
+  u8x8.drawStr(0, Ypos(5), layers[curLayer]);
+  u8x8.setFont(u8g2_font_6x12_mf);
+  u8x8.drawStr(0, Ypos(3), rtc.getTime("%H:%M").c_str());
+  u8x8.drawStr(0, Ypos(4), rtc.getTime("%d%h").c_str());
+  // X:  6 12 18 24 30 | 1 pix left
+  // Y: 12 24 36 48 60 72 84 96 108 120 | 8 pix left
+  // from bottom: 115 103 91 79 67 55 43 31 19
+  u8x8.drawStr(0, posY(0), String(getBatteryVoltage()).c_str());
+  u8x8.drawStr(24, posY(0), "V");
+  u8x8.drawStr(0, posY(1), String(tempCpu(), 1).c_str());
+  u8x8.drawStr(25, posY(1), String(char(176)).c_str());
   if (bleKeyboard.isConnected()) {
-    u8x8.drawStr(0, 111, "BLE1");
-    u8x8.drawStr(22, 111, String(deviceChose).c_str());
+    u8x8.drawStr(0, posY(3), "BLE");
+    u8x8.drawStr(22, posY(3), String(deviceChose).c_str());
+    // TODO read string from eprom
     switch (deviceChose) {
       case 0:
-        u8x8.drawStr(0, 95, "iPad");
-        break;
       case 1:
-        u8x8.drawStr(0, 95, "MBP");
-        break;
       case 2:
-        u8x8.drawStr(0, 95, "iMac");
+        u8x8.drawStr(0, posY(4), devs[deviceChose]);
         break;
     }
   } else {
-    u8x8.drawStr(0, 111, "----");
+    u8x8.drawStr(0, posY(4), "no BL");
+    u8x8.drawStr(0, posY(3), " dev.");
   }
   u8x8.sendBuffer();
   u8x8.refreshDisplay();
@@ -315,10 +346,12 @@ void matrixProces() {
   reportReady = 1;
 }
 
+// Keyboard state array initialize
 void keyboardSetup() {
   for (uint8_t row = 0; row < MATRIX_ROWS; row++) {
     for (uint8_t col = 0; col < MATRIX_COLS; col++) {
       keyEvents[row][col].state = KS_UP;
+      keyEvents[row][col].curState = 0;
       keyEvents[row][col].time_press = 0;
     }
   }
@@ -340,54 +373,19 @@ void keyboardTask(void *pvParameters) {
   }
 }
 
-void print_wakeup_reason() {
-  esp_sleep_wakeup_cause_t wakeup_reason;
-  wakeup_reason = esp_sleep_get_wakeup_cause();
-  switch (wakeup_reason) {
-    case ESP_SLEEP_WAKEUP_EXT0:
-      Serial.println("Wakeup caused by external signal using RTC_IO");
-      break;
-    case ESP_SLEEP_WAKEUP_EXT1:
-      Serial.println("Wakeup caused by external signal using RTC_CNTL");
-      break;
-    case ESP_SLEEP_WAKEUP_TIMER:
-      Serial.println("Wakeup caused by timer");
-      break;
-    case ESP_SLEEP_WAKEUP_TOUCHPAD:
-      Serial.println("Wakeup caused by touchpad");
-      break;
-    case ESP_SLEEP_WAKEUP_ULP:
-      Serial.println("Wakeup caused by ULP program");
-      break;
-    default:
-      Serial.printf("Wakeup was not caused by deep sleep: %d\n", wakeup_reason);
-      break;
-  }
-}
-
-float tempCpu() {
-  SET_PERI_REG_BITS(SENS_SAR_MEAS_WAIT2_REG, SENS_FORCE_XPD_SAR, 3,
-                    SENS_FORCE_XPD_SAR_S);
-  SET_PERI_REG_BITS(SENS_SAR_TSENS_CTRL_REG, SENS_TSENS_CLK_DIV, 10,
-                    SENS_TSENS_CLK_DIV_S);
-  CLEAR_PERI_REG_MASK(SENS_SAR_TSENS_CTRL_REG, SENS_TSENS_POWER_UP);
-  CLEAR_PERI_REG_MASK(SENS_SAR_TSENS_CTRL_REG, SENS_TSENS_DUMP_OUT);
-  SET_PERI_REG_MASK(SENS_SAR_TSENS_CTRL_REG, SENS_TSENS_POWER_UP_FORCE);
-  SET_PERI_REG_MASK(SENS_SAR_TSENS_CTRL_REG, SENS_TSENS_POWER_UP);
-  ets_delay_us(100);
-  SET_PERI_REG_MASK(SENS_SAR_TSENS_CTRL_REG, SENS_TSENS_DUMP_OUT);
-  ets_delay_us(5);
-  float temp_f = (float)GET_PERI_REG_BITS2(SENS_SAR_SLAVE_ADDR3_REG,
-                                           SENS_TSENS_OUT, SENS_TSENS_OUT_S);
-  float temp_c = (temp_f - 32) / 1.8;
-  return temp_c;
-}
-
 void setup() {
+  u8x8.begin();
+  u8x8.clearBuffer();
+  u8x8.setPowerSave(0);
+  u8x8.setContrast(1);
+  u8x8.setFont(u8g2_font_5x7_tf);
+  u8x8.drawStr(0, 8, "Booting..");
+  u8x8.sendBuffer();
+  u8x8.refreshDisplay();
   rtc_matrix_deinit();
+  // rtc.setTime(0, 27, 10, 28, 10, 2022);
   Serial.begin(115200);
   delay(1000);
-  print_wakeup_reason();
   Serial.println("Starting MMK");
   EEPROM.begin(4);
   deviceChose = EEPROM.read(0);
@@ -398,10 +396,6 @@ void setup() {
   esp_base_mac_addr_set(&MACAddress[deviceChose][0]);
   bleKeyboard.setName(GATTS_TAG);
   bleKeyboard.begin();
-  u8x8.begin();
-  u8x8.clearBuffer();
-  u8x8.setPowerSave(0);
-  u8x8.setContrast(1);
   matrixSetup();
   xTaskCreate(&keyboardTask, "keyboard task", 2048, NULL, 5, NULL);
 }
@@ -425,16 +419,12 @@ void loop(void) {
       bleKeyboard.sendReport(&report);
       reportReady = 0;
     }
-    if ((tmOut % 11) == 0) {
-      Serial.printf("Temp:%0.1f°C\n", tempCpu());
-    }
     if ((powerSave == 2) || ((powerSave == 1) && (tmOut == 1))) {
       powerSave = 0;
       u8x8.setPowerSave(powerSave);
       Serial.println("Display on");
     }
     if ((tmOut > SLEEP_DISPLAY) || (sleepDebug == 1)) {
-      // Serial.printf("tmOut:%d\n", tmOut);
       if (powerSave != 1) {
         powerSave = 1;
         u8x8.setPowerSave(powerSave);
@@ -446,8 +436,6 @@ void loop(void) {
         Serial.println("Going to sleep now");
         Serial.flush();
         delay(1000);
-        // gpio_deep_sleep_hold_en();
-        // esp_light_sleep_start();
         esp_deep_sleep_start();
         Serial.println("Wake up from sleep");
         esp_restart();
