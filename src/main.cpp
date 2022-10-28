@@ -1,5 +1,8 @@
 #include <Arduino.h>
 #include <config.h>
+#define Xpos(_col) (6 * _col)
+#define Ypos(_row) (12 * _row)
+#define posY(_row) (127 - Ypos(_row))
 
 U8G2_SSD1306_128X32_UNIVISION_F_HW_I2C u8x8(U8G2_R3, /* reset=*/U8X8_PIN_NONE,
                                             /* clock=*/OLED_SCL_PIN,
@@ -69,7 +72,6 @@ void rtc_matrix_setup(void) {
       rtc_gpio_set_direction(rowPins[row], RTC_GPIO_MODE_INPUT_OUTPUT);
       rtc_gpio_set_drive_capability(rowPins[row], GPIO_DRIVE_CAP_0);
       rtc_gpio_set_level(rowPins[row], 1);
-
     } else {
       digitalWrite(rowPins[row], 1);
       esp_sleep_enable_gpio_wakeup();
@@ -90,9 +92,6 @@ void rtc_matrix_setup(void) {
   }
 }
 
-#define Xpos(_col) (6 * _col)
-#define Ypos(_row) (12 * _row)
-#define posY(_row) (127 - Ypos(_row))
 void drawOled() {
   u8x8.clearBuffer();
   u8x8.setFont(u8g2_font_5x7_tf);
@@ -104,37 +103,39 @@ void drawOled() {
   }
   u8x8.drawStr(0, Ypos(5), layers[curLayer]);
   u8x8.setFont(u8g2_font_6x12_mf);
-  u8x8.drawStr(0, Ypos(3), rtc.getTime("%H:%M").c_str());
-  u8x8.drawStr(0, Ypos(4), rtc.getTime("%d%h").c_str());
+  if (rtc.getYear() > 2010) {
+    u8x8.drawStr(0, Ypos(7), rtc.getTime("%H:%M").c_str());
+    u8x8.drawStr(0, Ypos(8), rtc.getTime("%d").c_str());
+    u8x8.setFont(u8g2_font_4x6_tf);
+    u8x8.drawStr(Xpos(3), Ypos(8), rtc.getTime("%h").c_str());
+  }
   // X:  6 12 18 24 30 | 1 pix left
   // Y: 12 24 36 48 60 72 84 96 108 120 | 8 pix left
   // from bottom: 115 103 91 79 67 55 43 31 19
+  u8x8.setFont(u8g2_font_6x12_mf);
   u8x8.drawStr(0, posY(0), String(getBatteryVoltage()).c_str());
   u8x8.drawStr(24, posY(0), "V");
-  u8x8.drawStr(0, posY(1), String(tempCpu(), 1).c_str());
-  u8x8.drawStr(25, posY(1), String(char(176)).c_str());
   if (bleKeyboard.isConnected()) {
-    u8x8.drawStr(0, posY(3), "BLE");
-    u8x8.drawStr(22, posY(3), String(deviceChose).c_str());
     // TODO read string from eprom
     switch (deviceChose) {
       case 0:
       case 1:
       case 2:
-        u8x8.drawStr(0, posY(4), devs[deviceChose]);
+        u8x8.drawStr(0, posY(1), devs[deviceChose]);
         break;
     }
   } else {
-    u8x8.drawStr(0, posY(4), "no BL");
-    u8x8.drawStr(0, posY(3), " dev.");
+    u8x8.drawStr(0, posY(1), "no BL");
   }
+  // cat
+  u8x8.drawLine(0, 40, 4, 32);
+  u8x8.drawLine(4, 32, 6, 36);
+  u8x8.drawXBM(0, 20, 32, 32, cat);
   u8x8.sendBuffer();
   u8x8.refreshDisplay();
 }
 
 void changeID(int DevNum) {
-  // Serial.println("changing MAC...");
-  // Make sure the selection is valid
   if (DevNum < maxBTdev) {
     // Write and commit to storage, reset ESP 32
     EEPROM.write(0, DevNum);
@@ -192,16 +193,12 @@ void matrixScan() {
 void matrixPress(uint16_t keycode, uint8_t _hold) {
   uint8_t k = 0;
   uint8_t mediaReport[2] = {0, 0};
-  Serial.printf("\nat matrixTick:%lld matrixPress(0x%04x, %d)\n", matrixTick,
-                keycode, _hold);
   if (keycode & 0x8000) {
     if (_hold) {
       curLayer = (keycode & 0x0F00) >> 8;
     } else {
       k = (keycode & 0x00FF);
     }
-    Serial.printf("layer 0x%02x or TAP key 0x%02x ", (keycode & 0x0F00) >> 8,
-                  (keycode & 0x00FF));
   } else {
     if (keycode & 0x4000) {
       mediaReport[0] = (1 << ((keycode & 0x00FF) - 0x0C));
@@ -215,21 +212,15 @@ void matrixPress(uint16_t keycode, uint8_t _hold) {
         } else {
           k = (keycode & 0x00FF);
         }
-        Serial.printf("modifier 0x%02x or TAP key 0x%02x ", report.modifiers,
-                      (keycode & 0x00FF));
       } else {
         if (keycode & 0x1F00) {
           report.modifiers |=
               ((keycode & 0x0F00) >> (4 + 4 * (keycode & 0x1000)));
           k = (keycode & 0x00FF);
-          Serial.printf("modifier 0x%02x and key 0x%02x ",
-                        (keycode & 0x1F00) >> 8, (keycode & 0x00FF));
         } else {
           k = (keycode & 0x00FF);
           if ((keycode >= KC_LCTRL) && (keycode <= KC_RGUI)) {
             report.modifiers |= (1 << (keycode - KC_LCTRL));
-            Serial.printf("report.modifiers |= 0x%04x, keycode 0x%04x\n",
-                          (1 << (keycode - KC_LCTRL)), keycode);
           }
         }
       }
@@ -241,22 +232,18 @@ void matrixPress(uint16_t keycode, uint8_t _hold) {
         (report.keys[4] != k) && (report.keys[5] != k)) {
       for (uint8_t i = 0; i < 6; i++) {
         if (report.keys[i] == 0x00) {
-          Serial.printf("report.keys[%d] = %d", i, k);
           report.keys[i] = k;
           break;
         }
       }
     }
   }
-  Serial.printf(" layer:%d keycode:0x%04x\n", curLayer, k);
 }
 
 void matrixRelease(uint16_t keycode) {
   // TODO mod release
   uint8_t k;
   uint8_t mediaReport[2] = {0, 0};
-  Serial.printf("\nat matrixTick:%lld matrixRelease(0x%04x)\n", matrixTick,
-                keycode);
   if (keycode & 0x8000) {
     curLayer = 0;
   }
@@ -267,22 +254,16 @@ void matrixRelease(uint16_t keycode) {
   } else {
     if (keycode & 0x1F00) {
       report.modifiers &= ~((keycode & 0x0F00) >> (4 + 4 * (keycode & 0x1000)));
-      Serial.printf("release modifier 0x%02x and key 0x%02x\n",
-                    (keycode & 0x1F00) >> 8, (keycode & 0x00FF));
     }
     k = (keycode & 0x00FF);
     for (uint8_t i = 0; i < 6; i++) {
       if (0 != k && report.keys[i] == k) {
         releaseReport.keys[i] = k;
       }
-      Serial.printf("0x%04x ", releaseReport.keys[i]);
     }
     if ((keycode >= KC_LCTRL) && (keycode <= KC_RGUI)) {
       report.modifiers &= !(1 << (keycode - KC_LCTRL));
-      Serial.printf("report.modifiers &= 0x%04x, keycode 0x%04x\n",
-                    (1 << (keycode - KC_LCTRL)), keycode);
     }
-    Serial.printf("mod:0x%04x\n", report.modifiers);
   }
 }
 
@@ -304,8 +285,6 @@ void matrixProces() {
             if (matrixTick >
                 uint64_t(keyEvents[row][col].time_press + MODTAP_TIME)) {
               keyEvents[row][col].state = KS_HOLD;
-              // Serial.printf("press %d 0x%04x .. ", keycode,
-              // keyMap[curLayer][row][col]);
               if ((keycode >= BT_1) && (keycode <= BT_3)) {
                 changeID(keycode -
                          BT_1);  // reboot to select diffrent BT device
@@ -322,13 +301,11 @@ void matrixProces() {
         case KS_HOLD:
           if (keyEvents[row][col].pressed == 0) {
             keyEvents[row][col].state = KS_UP;
-            // Serial.printf("release %d\n", keycode);
             matrixRelease(keycode);
           }
           break;
         case KS_TAP:
           keyEvents[row][col].state = KS_RELASE;
-          Serial.printf("write %d\n", keycode);
           matrixPress(keycode, 0);
           break;
         case KS_RELASE: {
@@ -373,6 +350,27 @@ void keyboardTask(void *pvParameters) {
   }
 }
 
+void WifiTask(void *pvParameters) {
+  while (1) {
+    while (WiFi.status() != WL_CONNECTED) {
+      for (int i = 0; i < WiFis; i++) {
+        WiFi.begin(ssid[i], password[i]);
+        uint8_t n = 0;
+        while ((WiFi.status() != WL_CONNECTED) && (n < 20)) {
+          delay(500);
+          n++;
+        }
+        if (WiFi.status() == WL_CONNECTED) {
+          configTime(3600, 3600, "europe.pool.ntp.org");
+          break;
+        }
+        WiFi.disconnect();
+      }
+    }
+    vTaskDelay(1 / portTICK_PERIOD_MS);
+  }
+}
+
 void setup() {
   u8x8.begin();
   u8x8.clearBuffer();
@@ -383,7 +381,6 @@ void setup() {
   u8x8.sendBuffer();
   u8x8.refreshDisplay();
   rtc_matrix_deinit();
-  // rtc.setTime(0, 27, 10, 28, 10, 2022);
   Serial.begin(115200);
   delay(1000);
   Serial.println("Starting MMK");
@@ -398,9 +395,9 @@ void setup() {
   bleKeyboard.begin();
   matrixSetup();
   xTaskCreate(&keyboardTask, "keyboard task", 2048, NULL, 5, NULL);
+  xTaskCreate(&WifiTask, "wifi task", 2048, NULL, 5, NULL);
 }
 
-// TODO deep sleep
 void loop(void) {
   msec = esp_timer_get_time();
   fps++;
@@ -447,4 +444,4 @@ void loop(void) {
     }
     fps = 0;
   }
-}  // TODO pin35 encoder wakeup
+}
