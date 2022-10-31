@@ -96,7 +96,7 @@ void drawOled() {
   u8x8.clearBuffer();
   u8x8.setFont(u8g2_font_5x7_tf);
   // u8x8.drawStr(0, 8, "FPS");
-  u8x8.drawStr(Xpos(2), 8, String(WiFi.RSSI()).c_str());
+  // u8x8.drawStr(Xpos(2), 8, String(WiFi.RSSI()).c_str());
   u8x8.drawStr(0, posY(2), String(fps).c_str());
   bleKeyboard.setBatteryLevel(getBatteryLevel());
   u8x8.drawStr(0, Ypos(5), layers[curLayer]);
@@ -111,8 +111,6 @@ void drawOled() {
   // Y: 12 24 36 48 60 72 84 96 108 120 | 8 pix left
   // from bottom: 115 103 91 79 67 55 43 31 19
   u8x8.setFont(u8g2_font_6x12_mf);
-  u8x8.drawStr(0, posY(0), String(getBatteryVoltage()).c_str());
-  u8x8.drawStr(24, posY(0), "V");
   if (bleKeyboard.isConnected()) {
     // TODO read string from eprom
     switch (deviceChose) {
@@ -125,9 +123,23 @@ void drawOled() {
   } else {
     u8x8.drawStr(0, posY(1), "no BL");
   }
+  u8x8.drawStr(0, posY(0), String(getBatteryVoltage()).c_str());
+  u8x8.drawStr(24, posY(0), "V");
+  // u8x8.setFont(u8g2_font_emoticons21_tr);
+  // u8x8.setFont(u8g2_font_battery19_tn);
+  u8x8.setFont(u8g2_font_siji_t_6x10);
+  if (bleKeyboard.isConnected()) {
+    u8x8.drawGlyph(0, 12, 0xe00b);
+  }
+  uint8_t tmpi = -WiFi.RSSI();
+  if (tmpi > 0) {
+    u8x8.drawGlyph(
+        16, 8, 0xe258 + (tmpi < 80) + (tmpi < 70) + (tmpi < 60) + (tmpi < 50));
+  } else {
+    u8x8.drawGlyph(16, 8, 0xe141);
+  }
+  u8x8.drawGlyph(16, 16, 0xe241 + uint8_t(getBatteryLevel() / 10));
   // cat
-  u8x8.drawLine(0, 40, 4, 32);
-  u8x8.drawLine(4, 32, 6, 36);
   u8x8.drawXBM(0, 20, 32, 32, cat);
   u8x8.sendBuffer();
   u8x8.refreshDisplay();
@@ -348,6 +360,13 @@ void keyboardTask(void *pvParameters) {
   }
 }
 
+void otaTask(void *pvParameters) {
+  while (1) {
+    ArduinoOTA.handle();
+    vTaskDelay(10 / portTICK_PERIOD_MS);
+  }
+}
+
 void otaSetup() {
   ArduinoOTA
       .onStart([]() {
@@ -383,23 +402,26 @@ void otaSetup() {
 
 void WifiTask(void *pvParameters) {
   while (1) {
-    while (WiFi.status() != WL_CONNECTED) {
-      for (int i = 0; i < WiFis; i++) {
-        WiFi.begin(ssid[i], password[i]);
-        uint8_t n = 0;
-        while ((WiFi.status() != WL_CONNECTED) && (n < 20)) {
-          delay(500);
-          n++;
+    int16_t n = WiFi.scanNetworks();
+    int16_t ni = 0;
+    if (n > 0) {
+      while (WiFi.status() != WL_CONNECTED) {
+        for (int i = 0; i < WiFis; i++) {
+          for (ni = 0; ni < n; ni++) {
+            if (WiFi.SSID(ni) == String(ssid[i])) {
+              WiFi.begin(ssid[i], password[i]);
+              if (WiFi.waitForConnectResult() == WL_CONNECTED) {
+                configTime(3600, 00, "europe.pool.ntp.org");
+                otaSetup();
+                break;
+              }
+              WiFi.disconnect();
+            }
+          }
         }
-        if (WiFi.status() == WL_CONNECTED) {
-          configTime(3600, 00, "europe.pool.ntp.org");
-          otaSetup();
-          break;
-        }
-        WiFi.disconnect();
       }
     }
-    vTaskDelay(1 / portTICK_PERIOD_MS);
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
   }
 }
 
@@ -408,13 +430,19 @@ void setup() {
   u8x8.clearBuffer();
   u8x8.setPowerSave(0);
   u8x8.setContrast(1);
-  u8x8.setFont(u8g2_font_5x7_tf);
-  u8x8.drawStr(0, 8, "Booting..");
+  u8x8.setFont(u8g2_font_siji_t_6x10);
+  u8x8.drawGlyph(0, 32, 0xe020);
   u8x8.sendBuffer();
   u8x8.refreshDisplay();
   rtc_matrix_deinit();
   Serial.begin(115200);
   delay(1000);
+  u8x8.drawGlyph(12, 32, 0xe097);
+  u8x8.sendBuffer();
+  delay(500);
+  u8x8.drawGlyph(24, 32, 0xe097);
+  u8x8.sendBuffer();
+  u8x8.refreshDisplay();
   Serial.println("Starting MMK");
   EEPROM.begin(4);
   deviceChose = EEPROM.read(0);
@@ -428,6 +456,7 @@ void setup() {
   matrixSetup();
   xTaskCreate(&keyboardTask, "keyboard task", 2048, NULL, 5, NULL);
   xTaskCreate(&WifiTask, "wifi task", 2048, NULL, 5, NULL);
+  xTaskCreate(&otaTask, "OTA task", 2048, NULL, 5, NULL);
 }
 
 void loop(void) {
@@ -436,7 +465,7 @@ void loop(void) {
   if ((msec - lsec) > uint64_t(100000)) {  // every 0.1 mili second
     lsec = msec;
     tmOut++;
-    ArduinoOTA.handle();
+    // ArduinoOTA.handle();
     if (reportReady > 0) {
       bleKeyboard.sendReport(&report);
       for (uint8_t i = 0; i < 6; i++) {

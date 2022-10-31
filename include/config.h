@@ -2,7 +2,9 @@
 #include <BleKeyboard.h>
 #include <EEPROM.h>
 #include <ESP32Time.h>
+#include <ESPmDNS.h>
 #include <U8g2lib.h>
+#include <WiFiUdp.h>
 #include <action_code.h>
 #include <keycode.h>
 #include <quantum_keycodes.h>
@@ -112,7 +114,7 @@ uint8_t curLayer = 0;
 #define Number LT(2, KC_BSPACE)
 #define Funct LT(3, KC_NUBS)
 #define ENT_SFT MT(MOD_LSFT, KC_ENTER)
-#define GUI_ESC MT(MOD_LGUI, KC_ESC)
+#define GUI_ESC MT(MOD_RGUI, KC_ESC)
 #define SPC_ALT MT(MOD_LALT, KC_SPACE)
 #define TAB_CTL MT(MOD_LCTL, KC_TAB)
 keyevent_t keyEvents[MATRIX_ROWS][MATRIX_COLS] = {};
@@ -133,22 +135,22 @@ uint16_t keyMap[MATRIX_LAYERS][MATRIX_ROWS][MATRIX_COLS] = {
     {{KC_Q,   KC_W,   KC_E,   KC_R,   KC_T,   KC_Y,   KC_U,   KC_I,   KC_O,   KC_P},
      {KC_A,   KC_S,   KC_D,   KC_F,   KC_G,   KC_H,   KC_J,   KC_K,   KC_L,   KC_SCLN},
      {KC_Z,   KC_X,   KC_C,   KC_V,   KC_B,   KC_N,   KC_M,   KC_COMM,KC_DOT, KC_SLSH},
-     {Funct,  TAB_CTL,GUI_ESC,XXXXX,  ENT_SFT,SPC_ALT,XXXXX,  Number, KC_RGUI,KC_RALT}},
+     {Funct,  TAB_CTL,KC_LGUI,XXXXX,  ENT_SFT,SPC_ALT,XXXXX,  Number, GUI_ESC,KC_RALT}},
     // Symbol,
     {{KC_NO,  KC_NO,  KC_NO,  KC_NO,  KC_NO,  KC_NO,  KC_NO,  KC_NO,  KC_NO,  KC_NO},
      {KC_NO,  KC_MPLY,KC_MPRV,KC_MNXT,KC_NO,  KC_NO,  KC_NO,  KC_NO,  KC_NO,  KC_NO},
      {KC_NUBS,KC_MUTE,KC_VOLD,KC_VOLU,KC_NO,  DEBUG,  KC_NO,  BT_1,   BT_2,   BT_3},
-     {Funct,  TAB_CTL,GUI_ESC,XXXXX,  ENT_SFT,SPC_ALT,XXXXX,  Number, KC_RGUI,KC_RALT}},
+     {Funct,  TAB_CTL,KC_LGUI,XXXXX,  ENT_SFT,SPC_ALT,XXXXX,  Number, GUI_ESC,KC_RALT}},
     // Number
     {{KC_1,   KC_2,   KC_3,   KC_4,   KC_5,   KC_6,   KC_7,   KC_8,   KC_9,   KC_0},
      {KC_TAB, KC_NO,  KC_NO,  KC_NO,  KC_NO,  KC_LEFT,KC_DOWN,KC_UP,  KC_RIGHT,KC_ENTER},
      {KC_GRV, KC_NO,  KC_NO,  KC_NO,  KC_NO,  KC_HOME,KC_PGDN,KC_PGUP,KC_END, KC_BSLS},
-     {Symbol,  TAB_CTL,GUI_ESC,XXXXX,  ENT_SFT,SPC_ALT,XXXXX,  Number, KC_RGUI,KC_RALT}},
+     {Symbol, TAB_CTL,KC_LGUI,XXXXX,  ENT_SFT,SPC_ALT,XXXXX,  Number, GUI_ESC,KC_RALT}},
     // Function
     {{KC_ESC, KC_NO,  KC_NO,  KC_NO,  KC_NO,  KC_LBRC,KC_RBRC,KC_MINS,KC_EQUAL,KC_BSPACE},
      {KC_F1,  KC_F2,  KC_F3,  KC_F4,  KC_F5,  KC_LEFT,KC_DOWN,KC_UP,  KC_RIGHT,KC_ENTER},
      {KC_F6,  KC_F7,  KC_F8,  KC_F9,  KC_F10, KC_F11, KC_F12, KC_F13, KC_F14, KC_F15},
-     {Funct,  TAB_CTL,GUI_ESC,XXXXX,  ENT_SFT,SPC_ALT,XXXXX,  Symbol, KC_RGUI,KC_RALT}}};
+     {Funct,  TAB_CTL,KC_LGUI,XXXXX,  ENT_SFT,SPC_ALT,XXXXX,  Symbol, GUI_ESC,KC_RALT}}};
 // clang-format on q
 
 #define cat_width 32
