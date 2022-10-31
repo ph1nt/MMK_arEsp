@@ -8,6 +8,7 @@
 #include <quantum_keycodes.h>
 #include <stdio.h>
 
+#include "ArduinoOTA.h"
 #include "driver/gpio.h"
 #include "driver/rtc_io.h"
 #include "driver/touch_pad.h"
@@ -36,7 +37,7 @@
 #define MAX_BT_DEVICENAME_LENGTH 40
 #define SLEEP_DISPLAY 600  // 60 seconds to power off display
 #define SLEEP_CPU 3000     // 5 min
-#define MODTAP_TIME 180
+#define MODTAP_TIME 150
 #define DEBOUNCE 3  // debounce time in ms
 
 #define CHECK_BIT(var, pos) ((var) & (1 << (pos)))
@@ -88,7 +89,7 @@ typedef struct {
 ESP32Time rtc(0);  // offset in seconds GMT+2, for ntp 0?
 
 const char* devs[3] = {"iPad", "MBP", "iMac"};
-const char* layers[4] = {"default", "Symbol", "Number", "Funct."};
+const char* layers[4] = {"QWERTY", "Symbol", "Number", "Funct."};
 
 uint16_t deviceChose;
 // Define matrix
@@ -109,10 +110,11 @@ uint8_t curLayer = 0;
 #define TO(layer) (0x8000 | (((layer)&0xF) << 8))
 #define Symbol TO(1)
 #define Number LT(2, KC_BSPACE)
-#define Funct LT(3, KC_COMMA)
+#define Funct LT(3, KC_NUBS)
 #define ENT_SFT MT(MOD_LSFT, KC_ENTER)
-#define LGUI_ESC MT(MOD_LGUI, KC_ESC)
+#define GUI_ESC MT(MOD_LGUI, KC_ESC)
 #define SPC_ALT MT(MOD_LALT, KC_SPACE)
+#define TAB_CTL MT(MOD_LCTL, KC_TAB)
 keyevent_t keyEvents[MATRIX_ROWS][MATRIX_COLS] = {};
 /*
  * Mod bits:    43210
@@ -131,23 +133,23 @@ uint16_t keyMap[MATRIX_LAYERS][MATRIX_ROWS][MATRIX_COLS] = {
     {{KC_Q,   KC_W,   KC_E,   KC_R,   KC_T,   KC_Y,   KC_U,   KC_I,   KC_O,   KC_P},
      {KC_A,   KC_S,   KC_D,   KC_F,   KC_G,   KC_H,   KC_J,   KC_K,   KC_L,   KC_SCLN},
      {KC_Z,   KC_X,   KC_C,   KC_V,   KC_B,   KC_N,   KC_M,   KC_COMM,KC_DOT, KC_SLSH},
-     {Funct,  KC_LCTL,KC_LGUI,XXXXX,  ENT_SFT,SPC_ALT,XXXXX,  Number, KC_RGUI,Symbol}},
+     {Funct,  TAB_CTL,GUI_ESC,XXXXX,  ENT_SFT,SPC_ALT,XXXXX,  Number, KC_RGUI,KC_RALT}},
     // Symbol,
-    {{KC_NO,  KC_NO,  KC_NO,  KC_NO,  KC_NO,  KC_NO,  KC_NO,  KC_NO,  KC_LBRC,KC_RBRC},
-     {KC_NO,  KC_MPLY,KC_MPRV,KC_MNXT,KC_NO,  KC_NO,  KC_NO,  KC_NO,  KC_MINS,KC_EQUAL},
-     {KC_NUHS,KC_MUTE,KC_VOLD,KC_VOLU,KC_NO,  KC_NO,  KC_NO,  BT_1,   BT_2,   BT_3},
-     {Funct,  KC_LCTL,KC_LGUI,XXXXX,  ENT_SFT,SPC_ALT,XXXXX,  Number, KC_RGUI,Symbol}},
+    {{KC_NO,  KC_NO,  KC_NO,  KC_NO,  KC_NO,  KC_NO,  KC_NO,  KC_NO,  KC_NO,  KC_NO},
+     {KC_NO,  KC_MPLY,KC_MPRV,KC_MNXT,KC_NO,  KC_NO,  KC_NO,  KC_NO,  KC_NO,  KC_NO},
+     {KC_NUBS,KC_MUTE,KC_VOLD,KC_VOLU,KC_NO,  DEBUG,  KC_NO,  BT_1,   BT_2,   BT_3},
+     {Funct,  TAB_CTL,GUI_ESC,XXXXX,  ENT_SFT,SPC_ALT,XXXXX,  Number, KC_RGUI,KC_RALT}},
     // Number
     {{KC_1,   KC_2,   KC_3,   KC_4,   KC_5,   KC_6,   KC_7,   KC_8,   KC_9,   KC_0},
      {KC_TAB, KC_NO,  KC_NO,  KC_NO,  KC_NO,  KC_LEFT,KC_DOWN,KC_UP,  KC_RIGHT,KC_ENTER},
      {KC_GRV, KC_NO,  KC_NO,  KC_NO,  KC_NO,  KC_HOME,KC_PGDN,KC_PGUP,KC_END, KC_BSLS},
-     {Funct,  KC_LCTL,KC_LGUI,XXXXX,  ENT_SFT,SPC_ALT,XXXXX,  Number, KC_RGUI,Symbol}},
+     {Symbol,  TAB_CTL,GUI_ESC,XXXXX,  ENT_SFT,SPC_ALT,XXXXX,  Number, KC_RGUI,KC_RALT}},
     // Function
-    {{KC_ESC, KC_NO,  KC_NO,  KC_NO,  KC_NO,  KC_NO,  KC_NO,  KC_NO,  KC_NO,  KC_BSPACE},
+    {{KC_ESC, KC_NO,  KC_NO,  KC_NO,  KC_NO,  KC_LBRC,KC_RBRC,KC_MINS,KC_EQUAL,KC_BSPACE},
      {KC_F1,  KC_F2,  KC_F3,  KC_F4,  KC_F5,  KC_LEFT,KC_DOWN,KC_UP,  KC_RIGHT,KC_ENTER},
      {KC_F6,  KC_F7,  KC_F8,  KC_F9,  KC_F10, KC_F11, KC_F12, KC_F13, KC_F14, KC_F15},
-     {Funct,  KC_LCTL,KC_LGUI,XXXXX,  ENT_SFT,SPC_ALT,XXXXX,  Number, KC_RGUI,Symbol}}};
-// clang-format on
+     {Funct,  TAB_CTL,GUI_ESC,XXXXX,  ENT_SFT,SPC_ALT,XXXXX,  Symbol, KC_RGUI,KC_RALT}}};
+// clang-format on q
 
 #define cat_width 32
 #define cat_height 32

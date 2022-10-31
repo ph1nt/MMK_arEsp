@@ -95,12 +95,10 @@ void rtc_matrix_setup(void) {
 void drawOled() {
   u8x8.clearBuffer();
   u8x8.setFont(u8g2_font_5x7_tf);
-  u8x8.drawStr(0, 8, "FPS");
-  u8x8.drawStr(0, 16, String(fps).c_str());
+  // u8x8.drawStr(0, 8, "FPS");
+  u8x8.drawStr(Xpos(2), 8, String(WiFi.RSSI()).c_str());
+  u8x8.drawStr(0, posY(2), String(fps).c_str());
   bleKeyboard.setBatteryLevel(getBatteryLevel());
-  if (curLayer == 0) {
-    u8x8.setFont(u8g2_font_4x6_tf);
-  }
   u8x8.drawStr(0, Ypos(5), layers[curLayer]);
   u8x8.setFont(u8g2_font_6x12_mf);
   if (rtc.getYear() > 2010) {
@@ -190,6 +188,7 @@ void matrixScan() {
   }
 }
 
+const uint8_t mediacode[] = {16, 32, 64, 1, 2, 4, 8};
 void matrixPress(uint16_t keycode, uint8_t _hold) {
   uint8_t k = 0;
   uint8_t mediaReport[2] = {0, 0};
@@ -200,10 +199,9 @@ void matrixPress(uint16_t keycode, uint8_t _hold) {
       k = (keycode & 0x00FF);
     }
   } else {
-    if (keycode & 0x4000) {
-      mediaReport[0] = (1 << ((keycode & 0x00FF) - 0x0C));
+    if ((keycode & 0x4000) || ((keycode >= 168) && (keycode <= 174))) {
+      mediaReport[0] = mediacode[(keycode & 0x00FF) - 168];
       bleKeyboard.press(mediaReport);
-      Serial.printf("consumer control 0x%02x ", (keycode & 0x00FF));
     } else {
       if (keycode & 0x2000) {
         if (_hold) {
@@ -247,8 +245,8 @@ void matrixRelease(uint16_t keycode) {
   if (keycode & 0x8000) {
     curLayer = 0;
   }
-  if (keycode & 0x4000) {
-    mediaReport[0] = (1 << ((keycode & 0x00FF) - 0x0C));
+  if ((keycode & 0x4000) || ((keycode >= 168) && (keycode <= 174))) {
+    mediaReport[0] = mediacode[(keycode & 0x00FF) - 168];
     bleKeyboard.release(mediaReport);
     return;
   } else {
@@ -350,6 +348,39 @@ void keyboardTask(void *pvParameters) {
   }
 }
 
+void otaSetup() {
+  ArduinoOTA
+      .onStart([]() {
+        String type;
+        if (ArduinoOTA.getCommand() == U_FLASH)
+          type = "sketch";
+        else  // U_SPIFFS
+          type = "filesystem";
+        Serial.println("Start updating " + type);
+      })
+      .onEnd([]() { Serial.println("\nEnd"); })
+      .onProgress([](unsigned int progress, unsigned int total) {
+        Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
+      })
+      .onError([](ota_error_t error) {
+        Serial.printf("Error[%u]: ", error);
+        if (error == OTA_AUTH_ERROR)
+          Serial.println("Auth Failed");
+        else if (error == OTA_BEGIN_ERROR)
+          Serial.println("Begin Failed");
+        else if (error == OTA_CONNECT_ERROR)
+          Serial.println("Connect Failed");
+        else if (error == OTA_RECEIVE_ERROR)
+          Serial.println("Receive Failed");
+        else if (error == OTA_END_ERROR)
+          Serial.println("End Failed");
+      });
+  ArduinoOTA.setHostname("MMK");
+  // ArduinoOTA.setPassword("admin");
+  ArduinoOTA.begin();
+  Serial.println(WiFi.localIP());
+}
+
 void WifiTask(void *pvParameters) {
   while (1) {
     while (WiFi.status() != WL_CONNECTED) {
@@ -361,7 +392,8 @@ void WifiTask(void *pvParameters) {
           n++;
         }
         if (WiFi.status() == WL_CONNECTED) {
-          configTime(3600, 3600, "europe.pool.ntp.org");
+          configTime(3600, 00, "europe.pool.ntp.org");
+          otaSetup();
           break;
         }
         WiFi.disconnect();
@@ -404,6 +436,7 @@ void loop(void) {
   if ((msec - lsec) > uint64_t(100000)) {  // every 0.1 mili second
     lsec = msec;
     tmOut++;
+    ArduinoOTA.handle();
     if (reportReady > 0) {
       bleKeyboard.sendReport(&report);
       for (uint8_t i = 0; i < 6; i++) {
