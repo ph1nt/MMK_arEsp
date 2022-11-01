@@ -110,31 +110,29 @@ void drawOled() {
       u8x8.drawStr(0, 120, tmpStr);
     }
   } else {
-    u8x8.drawStr(0, posY(2), String(fps).c_str());
     bleKeyboard.setBatteryLevel(getBatteryLevel());
     u8x8.drawStr(0, Ypos(5), layers[curLayer]);
-    u8x8.setFont(u8g2_font_6x12_mf);
-    if (rtc.getYear() > 2010) {
-      u8x8.drawStr(0, Ypos(7), rtc.getTime("%H:%M").c_str());
-      u8x8.drawStr(0, Ypos(8), rtc.getTime("%d").c_str());
-      u8x8.setFont(u8g2_font_4x6_tf);
-      u8x8.drawStr(Xpos(3), Ypos(8), rtc.getTime("%h").c_str());
-    }
+
     // X:  6 12 18 24 30 | 1 pix left
     // Y: 12 24 36 48 60 72 84 96 108 120 | 8 pix left
     // from bottom: 115 103 91 79 67 55 43 31 19
     u8x8.setFont(u8g2_font_6x12_mf);
     if (bleKeyboard.isConnected()) {
-      switch (deviceChose) {
-        case 0:
-        case 1:
-        case 2:
-          u8x8.drawStr(0, posY(1), devs[deviceChose]);
-          break;
+      u8x8.drawStr(0, posY(1), devs[deviceChose]);
+    }
+    if (sleepDebug) {
+      u8x8.drawStr(0, posY(0), String(getBatteryVoltage()).c_str());
+      u8x8.drawStr(24, posY(0), "V");
+      u8x8.drawStr(0, posY(2), String(fps).c_str());
+    } else {
+      u8x8.setFont(u8g2_font_6x12_mf);
+      if (rtc.getYear() > 2010) {
+        u8x8.drawStr(0, Ypos(7), rtc.getTime("%H:%M").c_str());
+        u8x8.drawStr(0, Ypos(8), rtc.getTime("%d").c_str());
+        u8x8.setFont(u8g2_font_4x6_tf);
+        u8x8.drawStr(Xpos(3), Ypos(8), rtc.getTime("%h").c_str());
       }
     }
-    u8x8.drawStr(0, posY(0), String(getBatteryVoltage()).c_str());
-    u8x8.drawStr(24, posY(0), "V");
     // u8x8.setFont(u8g2_font_emoticons21_tr);
     // u8x8.setFont(u8g2_font_battery19_tn);
     u8x8.setFont(u8g2_font_siji_t_6x10);
@@ -308,13 +306,14 @@ void matrixProces() {
                 uint64_t(keyEvents[row][col].time_press + MODTAP_TIME)) {
               keyEvents[row][col].state = KS_HOLD;
               if ((keycode >= BT_1) && (keycode <= BT_3)) {
-                changeID(keycode -
-                         BT_1);  // reboot to select diffrent BT device
+                // reboot to select diffrent BT device
+                changeID(keycode - BT_1);
               }
               if (keycode == DEBUG) {
                 sleepDebug = 1;
+              } else {
+                matrixPress(keycode, 1);
               }
-              matrixPress(keycode, 1);
             }
           } else {
             keyEvents[row][col].state = KS_TAP;
@@ -323,7 +322,11 @@ void matrixProces() {
         case KS_HOLD:
           if (keyEvents[row][col].pressed == 0) {
             keyEvents[row][col].state = KS_UP;
-            matrixRelease(keycode);
+            if (keycode == DEBUG) {
+              sleepDebug = 0;
+            } else {
+              matrixRelease(keycode);
+            }
           }
           break;
         case KS_TAP:
@@ -360,9 +363,7 @@ void keyboardSetup() {
 void keyboardTask(void *pvParameters) {
   while (1) {
     if (!otaUpdate) {
-      if (sleepDebug == 0) {
-        matrixScan();
-      }
+      matrixScan();
       matrixProces();
       if (matrixChange == 1) {
         matrixChange = 0;
@@ -510,14 +511,13 @@ void loop(void) {
       u8x8.setPowerSave(powerSave);
       Serial.println("Display on");
     }
-    if ((tmOut > SLEEP_DISPLAY) || (sleepDebug == 1)) {
+    if (tmOut > SLEEP_DISPLAY) {
       if (powerSave != 1) {
         powerSave = 1;
         u8x8.setPowerSave(powerSave);
         Serial.println("Display off");
       }
-      if ((tmOut > SLEEP_CPU) || (sleepDebug == 1)) {
-        sleepDebug = 0;
+      if (tmOut > SLEEP_CPU) {
         rtc_matrix_setup();
         Serial.println("Going to sleep now");
         Serial.flush();
