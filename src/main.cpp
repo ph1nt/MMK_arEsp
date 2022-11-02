@@ -496,12 +496,22 @@ void encoderTask(void *pvParameters) {
   while (1) {
     switch (encoderState()) {
       case 1:
-        bleKeyboard.press(KEY_MEDIA_VOLUME_UP);
-        bleKeyboard.release(KEY_MEDIA_VOLUME_UP);
+        if (!curLayer) {
+          bleKeyboard.press(KEY_MEDIA_VOLUME_UP);
+          bleKeyboard.release(KEY_MEDIA_VOLUME_UP);
+        } else {
+          matrixPress(KC_F15, 0);
+          matrixRelease(KC_F15);
+        }
         break;
       case 2:
-        bleKeyboard.press(KEY_MEDIA_VOLUME_DOWN);
-        bleKeyboard.release(KEY_MEDIA_VOLUME_DOWN);
+        if (!curLayer) {
+          bleKeyboard.press(KEY_MEDIA_VOLUME_DOWN);
+          bleKeyboard.release(KEY_MEDIA_VOLUME_DOWN);
+        } else {
+          matrixPress(KC_F14, 0);
+          matrixRelease(KC_F14);
+        }
         break;
 
       default:
