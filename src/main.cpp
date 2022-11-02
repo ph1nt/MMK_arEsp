@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <config.h>
+
 #define Xpos(_col) (6 * _col)
 #define Ypos(_row) (12 * _row)
 #define posY(_row) (127 - Ypos(_row))
@@ -447,6 +448,69 @@ void WifiTask(void *pvParameters) {
   }
 }
 
+int16_t PastEncoderCount = 0;
+
+// setup encoder
+void encoderSetup(void) {
+  pcnt_config_t pcnt_config_a = {
+      .pulse_gpio_num = ENCODER_A_PIN,
+      .ctrl_gpio_num = ENCODER_B_PIN,
+      .lctrl_mode = PCNT_MODE_KEEP,
+      .hctrl_mode = PCNT_MODE_REVERSE,
+      .pos_mode = PCNT_COUNT_DIS,
+      .neg_mode = PCNT_COUNT_INC,
+      .counter_h_lim = INT16_MAX,
+      .counter_l_lim = INT16_MIN,
+      .unit = PCNT_UNIT_0,
+      .channel = PCNT_CHANNEL_0,
+  };
+  pcnt_unit_config(&pcnt_config_a);
+  pcnt_set_filter_value(PCNT_UNIT_0, 1023);
+  pcnt_filter_enable(PCNT_UNIT_0);
+  gpio_set_direction(ENCODER_A_PIN, GPIO_MODE_INPUT);
+  gpio_set_pull_mode(ENCODER_A_PIN, GPIO_PULLUP_ONLY);
+  gpio_set_direction(ENCODER_B_PIN, GPIO_MODE_INPUT);
+  gpio_set_pull_mode(ENCODER_B_PIN, GPIO_PULLUP_ONLY);
+  pcnt_counter_pause(PCNT_UNIT_0);
+  pcnt_counter_clear(PCNT_UNIT_0);
+  pcnt_counter_resume(PCNT_UNIT_0);
+}
+
+// Check encoder state
+uint8_t encoderState(void) {
+  uint8_t EncoderState = 0x00;
+  int16_t EncoderCount;
+  pcnt_get_counter_value(PCNT_UNIT_0, &EncoderCount);
+  Serial.println(EncoderCount);
+  if (EncoderCount > PastEncoderCount) {
+    EncoderState = 1;
+  }
+  if (EncoderCount < PastEncoderCount) {
+    EncoderState = 2;
+  }
+  PastEncoderCount = EncoderCount;
+  return EncoderState;
+}
+
+void encoderTask(void *pvParameters) {
+  while (1) {
+    switch (encoderState()) {
+      case 1:
+        bleKeyboard.press(KEY_MEDIA_VOLUME_UP);
+        bleKeyboard.release(KEY_MEDIA_VOLUME_UP);
+        break;
+      case 2:
+        bleKeyboard.press(KEY_MEDIA_VOLUME_DOWN);
+        bleKeyboard.release(KEY_MEDIA_VOLUME_DOWN);
+        break;
+
+      default:
+        break;
+    };
+    vTaskDelay(10 / portTICK_PERIOD_MS);
+  }
+}
+
 void setup() {
   u8x8.begin();
   u8x8.clearBuffer();
@@ -476,9 +540,11 @@ void setup() {
   bleKeyboard.setName(GATTS_TAG);
   bleKeyboard.begin();
   matrixSetup();
+  encoderSetup();
   xTaskCreate(&keyboardTask, "keyboard task", 2048, NULL, 5, NULL);
   xTaskCreate(&WifiTask, "wifi task", 2048, NULL, 5, NULL);
   xTaskCreate(&otaTask, "OTA task", 2048, NULL, 5, NULL);
+  xTaskCreate(&encoderTask, "encoder task", 2048, NULL, 5, NULL);
 }
 
 void loop(void) {

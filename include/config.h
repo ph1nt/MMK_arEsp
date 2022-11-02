@@ -12,6 +12,7 @@
 
 #include "ArduinoOTA.h"
 #include "driver/gpio.h"
+#include "driver/pcnt.h"
 #include "driver/rtc_io.h"
 #include "driver/touch_pad.h"
 #include "esp32/ulp.h"
@@ -110,7 +111,7 @@ uint8_t curLayer = 0;
 #define LT(layer, kc) (0x8000 | (((layer)&0xF) << 8) | ((kc)&0xFF))
 #define MT(mod, kc) (0x2000 | (((mod)&0x1F) << 8) | ((kc)&0xFF))
 #define TO(layer) (0x8000 | (((layer)&0xF) << 8))
-#define Symbol TO(1)
+#define Symbol LT(1, KC_DEL)
 #define Number LT(2, KC_BSPACE)
 #define Funct LT(3, KC_NUBS)
 #define ENT_SFT MT(MOD_LSFT, KC_ENTER)
@@ -143,7 +144,7 @@ uint16_t keyMap[MATRIX_LAYERS][MATRIX_ROWS][MATRIX_COLS] = {
      {Funct,  TAB_CTL,KC_LGUI,XXXXX,  ENT_SFT,SPC_ALT,XXXXX,  Number, GUI_ESC,KC_RALT}},
     // Number
     {{KC_1,   KC_2,   KC_3,   KC_4,   KC_5,   KC_6,   KC_7,   KC_8,   KC_9,   KC_0},
-     {KC_TAB, KC_NO,  KC_NO,  KC_NO,  KC_NO,  KC_LEFT,KC_DOWN,KC_UP,  KC_RIGHT,KC_ENTER},
+     {KC_TAB, KC_NO,  KC_NO,  KC_NO,  KC_NO,  KC_LEFT,KC_DOWN,KC_UP,  KC_RIGHT,KC_QUOT},
      {KC_GRV, KC_NO,  KC_NO,  KC_NO,  KC_NO,  KC_HOME,KC_PGDN,KC_PGUP,KC_END, KC_BSLS},
      {Symbol, TAB_CTL,KC_LGUI,XXXXX,  ENT_SFT,SPC_ALT,XXXXX,  Number, GUI_ESC,KC_RALT}},
     // Function
