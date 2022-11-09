@@ -9,6 +9,7 @@ U8G2_SSD1306_128X32_UNIVISION_F_HW_I2C u8x8(U8G2_R3, /* reset=*/U8X8_PIN_NONE,
                                             /* clock=*/OLED_SCL_PIN,
                                             /* data=*/OLED_SDA_PIN);
 BleKeyboard bleKeyboard(GATTS_TAG, "HNA", 100);
+// BleMouse bleMouse;
 
 boolean otaUpdate = false;
 unsigned int otaProgress = 0;
@@ -125,6 +126,7 @@ void drawOled() {
       u8x8.drawStr(0, posY(0), String(getBatteryVoltage()).c_str());
       u8x8.drawStr(24, posY(0), "V");
       u8x8.drawStr(0, posY(2), String(fps).c_str());
+      u8x8.drawStr(0, posY(3), BUILD_NUMBER);
     } else {
       u8x8.setFont(u8g2_font_6x12_mf);
       if (rtc.getYear() > 2010) {
@@ -240,8 +242,37 @@ void matrixPress(uint16_t keycode, uint8_t _hold) {
           k = (keycode & 0x00FF);
         } else {
           k = (keycode & 0x00FF);
-          if ((keycode >= KC_LCTRL) && (keycode <= KC_RGUI)) {
-            report.modifiers |= (1 << (keycode - KC_LCTRL));
+          if ((k >= KC_MS_U) & (k <= KC_ACL2)) {
+            // mouse
+            switch (k) {
+              case KC_MS_U:
+                bleKeyboard.move(0, -1);
+                break;
+              case KC_MS_D:
+                bleKeyboard.move(0, 1);
+                break;
+              case KC_MS_L:
+                bleKeyboard.move(-1, 0);
+                break;
+              case KC_MS_R:
+                bleKeyboard.move(1, 0);
+                break;
+              case KC_MS_BTN1:
+                bleKeyboard.click(1);
+                break;
+              case KC_MS_BTN2:
+                bleKeyboard.click(2);
+                break;
+              case KC_MS_BTN3:
+                bleKeyboard.click(4);
+                break;
+              default:
+                break;
+            }
+          } else {
+            if ((keycode >= KC_LCTRL) && (keycode <= KC_RGUI)) {
+              report.modifiers |= (1 << (keycode - KC_LCTRL));
+            }
           }
         }
       }
@@ -327,6 +358,21 @@ void matrixProces() {
               sleepDebug = 0;
             } else {
               matrixRelease(keycode);
+            }
+          } else {
+            switch (keycode) {
+              case KC_MS_U:
+                bleKeyboard.move(0, -1);
+                break;
+              case KC_MS_D:
+                bleKeyboard.move(0, 1);
+                break;
+              case KC_MS_L:
+                bleKeyboard.move(-1, 0);
+                break;
+              case KC_MS_R:
+                bleKeyboard.move(1, 0);
+                break;
             }
           }
           break;
@@ -481,7 +527,7 @@ uint8_t encoderState(void) {
   uint8_t EncoderState = 0x00;
   int16_t EncoderCount;
   pcnt_get_counter_value(PCNT_UNIT_0, &EncoderCount);
-  Serial.println(EncoderCount);
+  // Serial.println(EncoderCount);
   if (EncoderCount > PastEncoderCount) {
     EncoderState = 1;
   }
@@ -500,8 +546,12 @@ void encoderTask(void *pvParameters) {
           bleKeyboard.press(KEY_MEDIA_VOLUME_UP);
           bleKeyboard.release(KEY_MEDIA_VOLUME_UP);
         } else {
-          matrixPress(KC_F15, 0);
-          matrixRelease(KC_F15);
+          if (curLayer == 2) {
+            bleKeyboard.move(0, 0, 1, 0);
+          } else {
+            matrixPress(KC_F15, 0);
+            matrixRelease(KC_F15);
+          }
         }
         break;
       case 2:
@@ -509,8 +559,12 @@ void encoderTask(void *pvParameters) {
           bleKeyboard.press(KEY_MEDIA_VOLUME_DOWN);
           bleKeyboard.release(KEY_MEDIA_VOLUME_DOWN);
         } else {
-          matrixPress(KC_F14, 0);
-          matrixRelease(KC_F14);
+          if (curLayer == 2) {
+            bleKeyboard.move(0, 0, -1, 0);
+          } else {
+            matrixPress(KC_F14, 0);
+            matrixRelease(KC_F14);
+          }
         }
         break;
 
@@ -549,6 +603,7 @@ void setup() {
   esp_base_mac_addr_set(&MACAddress[deviceChose][0]);
   bleKeyboard.setName(GATTS_TAG);
   bleKeyboard.begin();
+  // bleMouse.begin();
   matrixSetup();
   encoderSetup();
   xTaskCreate(&keyboardTask, "keyboard task", 2048, NULL, 5, NULL);
@@ -578,7 +633,7 @@ void loop(void) {
           report.keys[i] = 0x00;
         }
       }
-      delay(1);
+      delay(5);
       bleKeyboard.sendReport(&report);
       reportReady = 0;
     }

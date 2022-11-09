@@ -1,5 +1,5 @@
 #include <Arduino.h>
-#include <BleKeyboard.h>
+#include <BleKeyboardMouse.h>
 #include <EEPROM.h>
 #include <ESP32Time.h>
 #include <ESPmDNS.h>
@@ -9,6 +9,7 @@
 #include <keycode.h>
 #include <quantum_keycodes.h>
 #include <stdio.h>
+#include <version.h>
 
 #include "ArduinoOTA.h"
 #include "driver/gpio.h"
@@ -41,7 +42,7 @@
 #define SLEEP_DISPLAY 600  // 60 seconds to power off display
 #define SLEEP_CPU 3000     // 5 min
 #define MODTAP_TIME 150
-#define DEBOUNCE 3  // debounce time in ms
+#define DEBOUNCE 2  // debounce time in ms
 
 #define CHECK_BIT(var, pos) ((var) & (1 << (pos)))
 #define SET_BIT(var, pos) (var |= 1 << pos);
@@ -144,8 +145,8 @@ uint16_t keyMap[MATRIX_LAYERS][MATRIX_ROWS][MATRIX_COLS] = {
      {Funct,  TAB_CTL,KC_LGUI,XXXXX,  ENT_SFT,SPC_ALT,XXXXX,  Number, GUI_ESC,KC_RALT}},
     // Number
     {{KC_1,   KC_2,   KC_3,   KC_4,   KC_5,   KC_6,   KC_7,   KC_8,   KC_9,   KC_0},
-     {KC_TAB, KC_NO,  KC_NO,  KC_NO,  KC_NO,  KC_LEFT,KC_DOWN,KC_UP,  KC_RIGHT,KC_QUOT},
-     {KC_GRV, KC_NO,  KC_NO,  KC_NO,  KC_NO,  KC_HOME,KC_PGDN,KC_PGUP,KC_END, KC_BSLS},
+     {KC_TAB, KC_MS_L,KC_MS_D,KC_MS_U,KC_MS_R,KC_LEFT,KC_DOWN,KC_UP,  KC_RIGHT,KC_QUOT},
+     {KC_GRV, KC_NO,  KC_BTN1,KC_BTN3,KC_BTN2,KC_HOME,KC_PGDN,KC_PGUP,KC_END, KC_BSLS},
      {Symbol, TAB_CTL,KC_LGUI,XXXXX,  ENT_SFT,SPC_ALT,XXXXX,  Number, GUI_ESC,KC_RALT}},
     // Function
     {{KC_ESC, KC_NO,  KC_NO,  KC_NO,  KC_NO,  KC_LBRC,KC_RBRC,KC_MINS,KC_EQUAL,KC_BSPACE},
