@@ -38,5 +38,5 @@ and wildly modified:
 
 action_code.h & keycode.h & quantum_keycodes.h from [QMK](https://github.com/qmk/qmk_firmware)
     
-![Build number generator for C and PlatformIO](https://gitlab.com/pvojnisek/buildnumber-for-platformio/tree/master)
+[Build number generator for C and PlatformIO](https://gitlab.com/pvojnisek/buildnumber-for-platformio/tree/master)
 
