@@ -35,4 +35,8 @@
 	
 and wildly modified:
     t-vk/ESP32 BLE Keyboard@^0.3.2
+
+action_code.h & keycode.h & quantum_keycodes.h from [QMK](https://github.com/qmk/qmk_firmware)
     
+##Build number generator for C and PlatformIO:
+https://gitlab.com/pvojnisek/buildnumber-for-platformio/tree/master
