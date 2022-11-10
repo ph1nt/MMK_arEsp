@@ -99,6 +99,9 @@ void rtc_matrix_setup(void) {
 }
 
 void drawOled() {
+  // X:  6 12 18 24 30 | 1 pix left
+  // Y: 12 24 36 48 60 72 84 96 108 120 | 8 pix left
+  // from bottom: 115 103 91 79 67 55 43 31 19
   char tmpStr[8];
   u8x8.clearBuffer();
   u8x8.setFont(u8g2_font_siji_t_6x10);
@@ -113,46 +116,47 @@ void drawOled() {
     }
   } else {
     bleKeyboard.setBatteryLevel(getBatteryLevel());
-    u8x8.drawStr(0, Ypos(5), layers[curLayer]);
-
-    // X:  6 12 18 24 30 | 1 pix left
-    // Y: 12 24 36 48 60 72 84 96 108 120 | 8 pix left
-    // from bottom: 115 103 91 79 67 55 43 31 19
-    u8x8.setFont(u8g2_font_6x12_mf);
-    if (bleKeyboard.isConnected()) {
-      u8x8.drawStr(0, posY(1), devs[deviceChose]);
-    }
     if (sleepDebug) {
-      u8x8.drawStr(0, posY(0), String(getBatteryVoltage()).c_str());
-      u8x8.drawStr(24, posY(0), "V");
-      u8x8.drawStr(0, posY(2), String(fps).c_str());
-      u8x8.drawStr(0, posY(3), BUILD_NUMBER);
+      u8x8.setDisplayRotation(U8G2_R0);
+      u8x8.drawStr(0, 10, String(getBatteryVoltage()).c_str());
+      u8x8.drawStr(24, 10, "V");
+      u8x8.drawStr(98, 10, String(fps).c_str());
+      u8x8.drawStr(0, 20, VERSION_SHORT);
+      u8x8.drawStr(98, 20, String(tempCpu()).c_str());
+      u8x8.drawStr(0, 31, "IP:");
+      u8x8.drawStr(18, 31, WiFi.localIP().toString().c_str());
+      // u8x8.drawStr(18, 31, String(WiFi.localIP()[3]).c_str());
     } else {
+      u8x8.setDisplayRotation(U8G2_R3);
+      u8x8.setFont(u8g2_font_5x8_tr);
+      u8x8.drawStr(0, Ypos(5), layers[curLayer]);
+      u8x8.setFont(u8g2_font_6x12_mf);
+      u8x8.drawStr(0, posY(0), devs[deviceChose]);
       u8x8.setFont(u8g2_font_6x12_mf);
       if (rtc.getYear() > 2010) {
         u8x8.drawStr(0, Ypos(7), rtc.getTime("%H:%M").c_str());
-        u8x8.drawStr(0, Ypos(8), rtc.getTime("%d").c_str());
-        u8x8.setFont(u8g2_font_4x6_tf);
-        u8x8.drawStr(Xpos(3), Ypos(8), rtc.getTime("%h").c_str());
+        u8x8.drawStr(Xpos(1), Ypos(8), rtc.getTime("%d").c_str());
+        // u8x8.setFont(u8g2_font_4x6_tf);
+        u8x8.drawStr(Xpos(2), Ypos(9), rtc.getTime("%b").c_str());
       }
+      // u8x8.setFont(u8g2_font_emoticons21_tr);
+      // u8x8.setFont(u8g2_font_battery19_tn);
+      u8x8.setFont(u8g2_font_siji_t_6x10);
+      if (bleKeyboard.isConnected()) {
+        u8x8.drawGlyph(0, 12, 0xe00b);
+      }
+      uint8_t tmpi = -WiFi.RSSI();
+      if (tmpi > 0) {
+        u8x8.drawGlyph(
+            16, 8,
+            0xe258 + (tmpi < 80) + (tmpi < 70) + (tmpi < 60) + (tmpi < 50));
+      } else {
+        u8x8.drawGlyph(16, 8, 0xe142);
+      }
+      u8x8.drawGlyph(16, 16, 0xe241 + uint8_t(getBatteryLevel() / 10));
+      // cat
+      u8x8.drawXBM(0, 20, 32, 32, cat);
     }
-    // u8x8.setFont(u8g2_font_emoticons21_tr);
-    // u8x8.setFont(u8g2_font_battery19_tn);
-    u8x8.setFont(u8g2_font_siji_t_6x10);
-    if (bleKeyboard.isConnected()) {
-      u8x8.drawGlyph(0, 12, 0xe00b);
-    }
-    uint8_t tmpi = -WiFi.RSSI();
-    if (tmpi > 0) {
-      u8x8.drawGlyph(
-          16, 8,
-          0xe258 + (tmpi < 80) + (tmpi < 70) + (tmpi < 60) + (tmpi < 50));
-    } else {
-      u8x8.drawGlyph(16, 8, 0xe142);
-    }
-    u8x8.drawGlyph(16, 16, 0xe241 + uint8_t(getBatteryLevel() / 10));
-    // cat
-    u8x8.drawXBM(0, 20, 32, 32, cat);
   }
   u8x8.sendBuffer();
   u8x8.refreshDisplay();
@@ -216,76 +220,79 @@ void matrixScan() {
 const uint8_t mediacode[] = {16, 32, 64, 1, 2, 4, 8};
 void matrixPress(uint16_t keycode, uint8_t _hold) {
   uint8_t k = 0;
-  uint8_t mediaReport[2] = {0, 0};
-  if (keycode & 0x8000) {
-    if (_hold) {
-      curLayer = (keycode & 0x0F00) >> 8;
-    } else {
-      k = (keycode & 0x00FF);
-    }
-  } else {
-    if ((keycode & 0x4000) || ((keycode >= 168) && (keycode <= 174))) {
-      mediaReport[0] = mediacode[(keycode & 0x00FF) - 168];
-      bleKeyboard.press(mediaReport);
-    } else {
-      if (keycode & 0x2000) {
-        if (_hold) {
-          report.modifiers |=
-              ((keycode & 0x0F00) >> (4 + 4 * (keycode & 0x1000)));
-        } else {
-          k = (keycode & 0x00FF);
-        }
+  if (keycode != DEBUG) {
+    uint8_t mediaReport[2] = {0, 0};
+    if (keycode & 0x8000) {
+      if (_hold) {
+        curLayer = ((keycode & 0x0F00) >> 8);
       } else {
-        if (keycode & 0x1F00) {
-          report.modifiers |=
-              ((keycode & 0x0F00) >> (4 + 4 * (keycode & 0x1000)));
-          k = (keycode & 0x00FF);
-        } else {
-          k = (keycode & 0x00FF);
-          if ((k >= KC_MS_U) & (k <= KC_ACL2)) {
-            // mouse
-            switch (k) {
-              case KC_MS_U:
-                bleKeyboard.move(0, -1);
-                break;
-              case KC_MS_D:
-                bleKeyboard.move(0, 1);
-                break;
-              case KC_MS_L:
-                bleKeyboard.move(-1, 0);
-                break;
-              case KC_MS_R:
-                bleKeyboard.move(1, 0);
-                break;
-              case KC_MS_BTN1:
-                bleKeyboard.click(1);
-                break;
-              case KC_MS_BTN2:
-                bleKeyboard.click(2);
-                break;
-              case KC_MS_BTN3:
-                bleKeyboard.click(4);
-                break;
-              default:
-                break;
-            }
+        k = (keycode & 0x00FF);
+      }
+    } else {
+      if ((keycode & 0x4000) || ((keycode >= 168) && (keycode <= 174))) {
+        mediaReport[0] = mediacode[(keycode & 0x00FF) - 168];
+        bleKeyboard.press(mediaReport);
+      } else {
+        if (keycode & 0x2000) {
+          if (_hold) {
+            report.modifiers |=
+                ((keycode & 0x0F00) >> (4 + 4 * (keycode & 0x1000)));
           } else {
-            if ((keycode >= KC_LCTRL) && (keycode <= KC_RGUI)) {
-              report.modifiers |= (1 << (keycode - KC_LCTRL));
+            k = (keycode & 0x00FF);
+          }
+        } else {
+          if (keycode & 0x1F00) {
+            report.modifiers |=
+                ((keycode & 0x0F00) >> (4 + 4 * (keycode & 0x1000)));
+            k = (keycode & 0x00FF);
+          } else {
+            if ((keycode >= KC_MS_U) & (keycode <= KC_ACL2)) {
+              // mouse
+              switch (keycode) {
+                case KC_MS_U:
+                  bleKeyboard.move(0, -1);
+                  break;
+                case KC_MS_D:
+                  bleKeyboard.move(0, 1);
+                  break;
+                case KC_MS_L:
+                  bleKeyboard.move(-1, 0);
+                  break;
+                case KC_MS_R:
+                  bleKeyboard.move(1, 0);
+                  break;
+                case KC_MS_BTN1:
+                  bleKeyboard.click(1);
+                  break;
+                case KC_MS_BTN2:
+                  bleKeyboard.click(2);
+                  break;
+                case KC_MS_BTN3:
+                  bleKeyboard.click(4);
+                  break;
+                default:
+                  break;
+              }
+            } else {
+              if ((keycode >= KC_LCTRL) && (keycode <= KC_RGUI)) {
+                report.modifiers |= (1 << (keycode - KC_LCTRL));
+              } else {
+                k = (keycode & 0x00FF);
+              }
             }
           }
         }
       }
     }
-  }
-  if (k != 0) {
-    if ((report.keys[0] != k) && (report.keys[1] != k) &&
-        (report.keys[2] != k) && (report.keys[3] != k) &&
-        (report.keys[4] != k) && (report.keys[5] != k)) {
-      for (uint8_t i = 0; i < 6; i++) {
-        if (report.keys[i] == 0x00) {
-          report.keys[i] = k;
-          break;
+    if (k != 0) {
+      if ((report.keys[0] != k) && (report.keys[1] != k) &&
+          (report.keys[2] != k) && (report.keys[3] != k) &&
+          (report.keys[4] != k) && (report.keys[5] != k)) {
+        for (uint8_t i = 0; i < 6; i++) {
+          if (report.keys[i] == 0x00) {
+            report.keys[i] = k;
+            break;
+          }
         }
       }
     }
@@ -294,27 +301,30 @@ void matrixPress(uint16_t keycode, uint8_t _hold) {
 
 void matrixRelease(uint16_t keycode) {
   // TODO mod release
-  uint8_t k;
-  uint8_t mediaReport[2] = {0, 0};
-  if (keycode & 0x8000) {
-    curLayer = 0;
-  }
-  if ((keycode & 0x4000) || ((keycode >= 168) && (keycode <= 174))) {
-    mediaReport[0] = mediacode[(keycode & 0x00FF) - 168];
-    bleKeyboard.release(mediaReport);
-    return;
-  } else {
-    if (keycode & 0x1F00) {
-      report.modifiers &= ~((keycode & 0x0F00) >> (4 + 4 * (keycode & 0x1000)));
+  if (keycode != DEBUG) {
+    uint8_t k;
+    uint8_t mediaReport[2] = {0, 0};
+    if (keycode & 0x8000) {
+      curLayer = 0;
     }
-    k = (keycode & 0x00FF);
-    for (uint8_t i = 0; i < 6; i++) {
-      if (0 != k && report.keys[i] == k) {
-        releaseReport.keys[i] = k;
+    if ((keycode & 0x4000) || ((keycode >= 168) && (keycode <= 174))) {
+      mediaReport[0] = mediacode[(keycode & 0x00FF) - 168];
+      bleKeyboard.release(mediaReport);
+      return;
+    } else {
+      if (keycode & 0x1F00) {
+        report.modifiers &=
+            ~((keycode & 0x0F00) >> (4 + 4 * (keycode & 0x1000)));
       }
-    }
-    if ((keycode >= KC_LCTRL) && (keycode <= KC_RGUI)) {
-      report.modifiers &= !(1 << (keycode - KC_LCTRL));
+      k = (keycode & 0x00FF);
+      for (uint8_t i = 0; i < 6; i++) {
+        if (0 != k && report.keys[i] == k) {
+          releaseReport.keys[i] = k;
+        }
+      }
+      if ((keycode >= KC_LCTRL) && (keycode <= KC_RGUI)) {
+        report.modifiers &= !(1 << (keycode - KC_LCTRL));
+      }
     }
   }
 }
@@ -633,7 +643,7 @@ void loop(void) {
           report.keys[i] = 0x00;
         }
       }
-      delay(5);
+      delay(9);
       bleKeyboard.sendReport(&report);
       reportReady = 0;
     }
