@@ -42,7 +42,7 @@ float tempCpu() {
   ets_delay_us(5);
   float temp_f = (float)GET_PERI_REG_BITS2(SENS_SAR_SLAVE_ADDR3_REG,
                                            SENS_TSENS_OUT, SENS_TSENS_OUT_S);
-  float temp_c = (temp_f - 32) / 1.8;
+  float temp_c = round((temp_f - 32.0) * 50 / 9) / 10;
   return temp_c;
 }
 
@@ -118,13 +118,17 @@ void drawOled() {
     bleKeyboard.setBatteryLevel(getBatteryLevel());
     if (sleepDebug) {
       u8x8.setDisplayRotation(U8G2_R0);
-      u8x8.drawStr(0, 10, String(getBatteryVoltage()).c_str());
-      u8x8.drawStr(24, 10, "V");
+      u8x8.drawStr(0, 10, "batt:");
+      u8x8.drawStr(30, 10, String(getBatteryVoltage()).c_str());
+      u8x8.drawStr(54, 10, "V");
+      u8x8.drawStr(80, 10, "fps");
       u8x8.drawStr(98, 10, String(fps).c_str());
       u8x8.drawStr(0, 20, VERSION_SHORT);
+      u8x8.drawStr(80, 20, "cpu");
       u8x8.drawStr(98, 20, String(tempCpu()).c_str());
+      u8x8.drawGlyph(121, 20, 0x00b0);
       u8x8.drawStr(0, 31, "IP:");
-      u8x8.drawStr(18, 31, WiFi.localIP().toString().c_str());
+      u8x8.drawStr(24, 31, WiFi.localIP().toString().c_str());
       // u8x8.drawStr(18, 31, String(WiFi.localIP()[3]).c_str());
     } else {
       u8x8.setDisplayRotation(U8G2_R3);
