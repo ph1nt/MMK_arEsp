@@ -98,38 +98,43 @@ void rtc_matrix_setup(void) {
   }
 }
 
+void otaOled() {
+  char tmpStr[8];
+  u8x8.drawGlyphX2(4, 40 + 2 * (rtc.getSecond() % 10), 0xe061);
+  u8x8.drawGlyphX2(4, 80, 0xe028);
+  if (otaTotal != 0) {
+    sprintf(tmpStr, "%d%%", (100 * otaProgress / otaTotal));
+    u8x8.drawStr(4, 100, tmpStr);
+    sprintf(tmpStr, "%dk", uint16_t(otaTotal / 1024));
+    u8x8.drawStr(0, 120, tmpStr);
+  }
+}
+void debugOled() {
+  u8x8.setDisplayRotation(U8G2_R0);
+  u8x8.drawStr(0, 10, "batt:");
+  u8x8.drawStr(30, 10, String(getBatteryVoltage()).c_str());
+  u8x8.drawStr(54, 10, "V");
+  u8x8.drawStr(80, 10, "fps");
+  u8x8.drawStr(98, 10, String(fps).c_str());
+  u8x8.drawStr(0, 20, VERSION_SHORT);
+  u8x8.drawStr(80, 20, "cpu");
+  u8x8.drawStr(98, 20, String(tempCpu()).c_str());
+  u8x8.drawGlyph(121, 20, 0x00b0);
+  u8x8.drawStr(0, 31, "IP:");
+  u8x8.drawStr(24, 31, WiFi.localIP().toString().c_str());
+}
 void drawOled() {
   // X:  6 12 18 24 30 | 1 pix left
   // Y: 12 24 36 48 60 72 84 96 108 120 | 8 pix left
   // from bottom: 115 103 91 79 67 55 43 31 19
-  char tmpStr[8];
   u8x8.clearBuffer();
   u8x8.setFont(u8g2_font_siji_t_6x10);
   if (otaUpdate) {
-    u8x8.drawGlyphX2(4, 40 + 2 * (rtc.getSecond() % 10), 0xe061);
-    u8x8.drawGlyphX2(4, 80, 0xe028);
-    if (otaTotal != 0) {
-      sprintf(tmpStr, "%d%%", (100 * otaProgress / otaTotal));
-      u8x8.drawStr(4, 100, tmpStr);
-      sprintf(tmpStr, "%dk", uint16_t(otaTotal / 1024));
-      u8x8.drawStr(0, 120, tmpStr);
-    }
+    otaOled();
   } else {
     bleKeyboard.setBatteryLevel(getBatteryLevel());
     if (sleepDebug) {
-      u8x8.setDisplayRotation(U8G2_R0);
-      u8x8.drawStr(0, 10, "batt:");
-      u8x8.drawStr(30, 10, String(getBatteryVoltage()).c_str());
-      u8x8.drawStr(54, 10, "V");
-      u8x8.drawStr(80, 10, "fps");
-      u8x8.drawStr(98, 10, String(fps).c_str());
-      u8x8.drawStr(0, 20, VERSION_SHORT);
-      u8x8.drawStr(80, 20, "cpu");
-      u8x8.drawStr(98, 20, String(tempCpu()).c_str());
-      u8x8.drawGlyph(121, 20, 0x00b0);
-      u8x8.drawStr(0, 31, "IP:");
-      u8x8.drawStr(24, 31, WiFi.localIP().toString().c_str());
-      // u8x8.drawStr(18, 31, String(WiFi.localIP()[3]).c_str());
+      debugOled();
     } else {
       u8x8.setDisplayRotation(U8G2_R3);
       u8x8.setFont(u8g2_font_5x8_tr);
@@ -202,15 +207,21 @@ void matrixSetup(void) {
 void matrixScan() {
   uint8_t curState = 0;
   matrixTick++;
+  // Serial.printf("tick: %d ", matrixTick);
   for (uint8_t row = 0; row < MATRIX_ROWS; row++) {
     gpio_set_level(rowPins[row], 1);
     for (uint8_t col = 0; col < MATRIX_COLS; col++) {
       curState = gpio_get_level(colPins[col]);
       if (keyEvents[row][col].curState != curState) {
         keyEvents[row][col].time_debounce = matrixTick;
+        // DEBUG
+        Serial.printf("!=curState row:%d, col:%d, time:%d, state:%d\n", row,
+                      col, matrixTick, curState);
       }
       if ((matrixTick - keyEvents[row][col].time_debounce) > DEBOUNCE) {
         if (keyEvents[row][col].pressed != curState) {
+          Serial.printf("matrixChange row:%d, col:%d, time:%d, state:%d\n", row,
+                        col, matrixTick, curState);
           matrixChange = 1;
           keyEvents[row][col].pressed = curState;
         }
@@ -344,6 +355,8 @@ void matrixProces() {
           if (keyEvents[row][col].pressed == 1) {
             keyEvents[row][col].state = KS_DOWN;
             keyEvents[row][col].time_press = matrixTick;
+            Serial.printf("KS_DOWN row:%d col:%d time:%d\n", row, col,
+                          matrixTick);
           }
           break;
         case KS_DOWN:
@@ -351,6 +364,8 @@ void matrixProces() {
             if (matrixTick >
                 uint64_t(keyEvents[row][col].time_press + MODTAP_TIME)) {
               keyEvents[row][col].state = KS_HOLD;
+              Serial.printf("KS_HOLD row:%d col:%d time:%d\n", row, col,
+                            matrixTick);
               if ((keycode >= BT_1) && (keycode <= BT_3)) {
                 // reboot to select diffrent BT device
                 changeID(keycode - BT_1);
@@ -363,15 +378,20 @@ void matrixProces() {
             }
           } else {
             keyEvents[row][col].state = KS_TAP;
+            Serial.printf("KS_TAP row:%d col:%d time:%d\n\n", row, col,
+                          matrixTick);
           }
           break;
         case KS_HOLD:
           if (keyEvents[row][col].pressed == 0) {
             keyEvents[row][col].state = KS_UP;
+            Serial.printf("KS_UP row:%d col:%d time:%d\n\n", row, col,
+                          matrixTick);
             if (keycode == DEBUG) {
               sleepDebug = 0;
             } else {
               matrixRelease(keycode);
+              reportReady++;
             }
           } else {
             switch (keycode) {
@@ -393,9 +413,11 @@ void matrixProces() {
         case KS_TAP:
           keyEvents[row][col].state = KS_RELASE;
           matrixPress(keycode, 0);
+          reportReady++;
           break;
         case KS_RELASE: {
           matrixRelease(keycode);
+          reportReady++;
           keyEvents[row][col].state = KS_UP;
         } break;
         default:
@@ -405,8 +427,6 @@ void matrixProces() {
       }
     }
   }
-  // bleKeyboard.sendReport(&report);
-  reportReady = 1;
 }
 
 // Keyboard state array initialize
@@ -640,6 +660,7 @@ void loop(void) {
     }
     // ArduinoOTA.handle();
     if (reportReady > 0) {
+      Serial.printf("reportReady = %d ", reportReady);
       bleKeyboard.sendReport(&report);
       for (uint8_t i = 0; i < 6; i++) {
         if (report.keys[i] == releaseReport.keys[i]) {
@@ -649,6 +670,7 @@ void loop(void) {
       }
       delay(9);
       bleKeyboard.sendReport(&report);
+      Serial.printf("reportReady = %d\n", reportReady);
       reportReady = 0;
     }
     if ((powerSave == 2) || ((powerSave == 1) && (tmOut == 1))) {
