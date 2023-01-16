@@ -9,11 +9,18 @@ U8G2_SSD1306_128X32_UNIVISION_F_HW_I2C u8x8(U8G2_R3, /* reset=*/U8X8_PIN_NONE,
                                             /* clock=*/OLED_SCL_PIN,
                                             /* data=*/OLED_SDA_PIN);
 BleKeyboard bleKeyboard(GATTS_TAG, "HNA", 100);
-// BleMouse bleMouse;
 
 boolean otaUpdate = false;
 unsigned int otaProgress = 0;
 unsigned int otaTotal = 30;
+
+void getFreeRAM() {
+  // Internal RAM
+  uint32_t getHeapSize();      // total heap size
+  uint32_t getFreeHeap();      // available heap
+  uint32_t getMinFreeHeap();   // lowest level of free heap since boot
+  uint32_t getMaxAllocHeap();  // largest block that can be allocated at once
+}
 
 float_t getBatteryVoltage(void) {
   return analogReadMilliVolts(BATT_PIN) / 520.0;
@@ -46,7 +53,7 @@ float tempCpu() {
   return temp_c;
 }
 
-uint16_t fps, tmOut, sleepDebug = 0;
+uint16_t fps, tmOut, sleepDebug = 0, powerOff = 0;
 
 // deinitializing rtc matrix pins on  deep sleep wake up
 void rtc_matrix_deinit(void) {
@@ -98,7 +105,7 @@ void rtc_matrix_setup(void) {
   }
 }
 
-void otaOled() {
+void oledOta() {
   char tmpStr[8];
   u8x8.drawGlyphX2(4, 40 + 2 * (rtc.getSecond() % 10), 0xe061);
   u8x8.drawGlyphX2(4, 80, 0xe028);
@@ -109,7 +116,8 @@ void otaOled() {
     u8x8.drawStr(0, 120, tmpStr);
   }
 }
-void debugOled() {
+
+void oledDebug() {
   u8x8.setDisplayRotation(U8G2_R0);
   u8x8.drawStr(0, 10, "batt:");
   u8x8.drawStr(30, 10, String(getBatteryVoltage()).c_str());
@@ -123,25 +131,35 @@ void debugOled() {
   u8x8.drawStr(0, 31, "IP:");
   u8x8.drawStr(24, 31, WiFi.localIP().toString().c_str());
 }
-void drawOled() {
+
+void oledSleep() {
+  u8x8.drawStr(0, 36, "Power");
+  u8x8.drawStr(0, 48, "off..");
+}
+
+void oledDraw(uint8_t _stage = 0) {
   // X:  6 12 18 24 30 | 1 pix left
   // Y: 12 24 36 48 60 72 84 96 108 120 | 8 pix left
   // from bottom: 115 103 91 79 67 55 43 31 19
   u8x8.clearBuffer();
   u8x8.setFont(u8g2_font_siji_t_6x10);
-  if (otaUpdate) {
-    otaOled();
-  } else {
-    bleKeyboard.setBatteryLevel(getBatteryLevel());
-    if (sleepDebug) {
-      debugOled();
-    } else {
+  switch (_stage) {
+    case 1:
+      oledOta();
+      break;
+    case 2:
+      oledDebug();
+      break;
+    case 3:
+      oledSleep();
+      break;
+
+    default:
       u8x8.setDisplayRotation(U8G2_R3);
       u8x8.setFont(u8g2_font_5x8_tr);
       u8x8.drawStr(0, Ypos(5), layers[curLayer]);
       u8x8.setFont(u8g2_font_6x12_mf);
       u8x8.drawStr(0, posY(0), devs[deviceChose]);
-      u8x8.setFont(u8g2_font_6x12_mf);
       if (rtc.getYear() > 2010) {
         u8x8.drawStr(0, Ypos(7), rtc.getTime("%H:%M").c_str());
         u8x8.drawStr(Xpos(1), Ypos(8), rtc.getTime("%d").c_str());
@@ -164,19 +182,23 @@ void drawOled() {
       }
       u8x8.drawGlyph(16, 16, 0xe241 + uint8_t(getBatteryLevel() / 10));
       // cat
-      u8x8.drawXBM(0, 20, 32, 32, cat);
-    }
+      if (curLayer > 0) {
+        u8x8.setFont(u8g2_font_streamline_all_t);
+        u8x8.drawGlyph(5, 43, 0x0125 + curLayer);
+      } else {
+        u8x8.drawXBM(0, 20, 32, 32, cat);
+      }
+      break;
   }
   u8x8.sendBuffer();
   u8x8.refreshDisplay();
 }
 
+// Write to eprom, reset ESP 32
 void changeID(int DevNum) {
   if (DevNum < maxBTdev) {
-    // Write and commit to storage, reset ESP 32
     EEPROM.write(0, DevNum);
     EEPROM.commit();
-    // esp_reset();
     esp_sleep_enable_timer_wakeup(1);
     esp_deep_sleep_start();
   }
@@ -355,8 +377,8 @@ void matrixProces() {
           if (keyEvents[row][col].pressed == 1) {
             keyEvents[row][col].state = KS_DOWN;
             keyEvents[row][col].time_press = matrixTick;
-            Serial.printf("KS_DOWN row:%d col:%d time:%d\n", row, col,
-                          matrixTick);
+            Serial.printf("KS_DOWN keycode:%d row:%d col:%d time:%d\n", keycode,
+                          row, col, matrixTick);
           }
           break;
         case KS_DOWN:
@@ -364,29 +386,48 @@ void matrixProces() {
             if (matrixTick >
                 uint64_t(keyEvents[row][col].time_press + MODTAP_TIME)) {
               keyEvents[row][col].state = KS_HOLD;
-              Serial.printf("KS_HOLD row:%d col:%d time:%d\n", row, col,
-                            matrixTick);
+              Serial.printf("KS_HOLD keycode:%d row:%d col:%d time:%d \n",
+                            keycode, row, col, matrixTick);
               if ((keycode >= BT_1) && (keycode <= BT_3)) {
                 // reboot to select diffrent BT device
                 changeID(keycode - BT_1);
               }
-              if (keycode == DEBUG) {
-                sleepDebug = 1;
-              } else {
-                matrixPress(keycode, 1);
+              switch (keycode) {
+                case DEBUG:
+                  sleepDebug = 1;
+                  break;
+                case KC_SYSTEM_POWER:
+                  powerOff = 1;
+                  Serial.println("Power off..");
+                  break;
+
+                default:
+                  matrixPress(keycode, 1);
+                  break;
               }
             }
           } else {
             keyEvents[row][col].state = KS_TAP;
-            Serial.printf("KS_TAP row:%d col:%d time:%d\n\n", row, col,
-                          matrixTick);
+            for (uint8_t _row = 0; _row < MATRIX_ROWS; _row++) {
+              for (uint8_t _col = 0; _col < MATRIX_COLS; _col++) {
+                // if modtap key is pressed and time not elapsed
+                if (keyEvents[_row][_col].state == KS_DOWN) {
+                  if ((keyMap[curLayer][_row][_col] && 0x2000) != 0) {
+                    keyEvents[_row][_col].state = KS_HOLD;
+                    matrixPress(keyMap[curLayer][_row][_col], 1);
+                  }
+                }
+              }
+            }
+            Serial.printf("KS_TAP row:%d col:%d time:%d keycode:%d\n\n", row,
+                          col, matrixTick, keycode);
           }
           break;
         case KS_HOLD:
           if (keyEvents[row][col].pressed == 0) {
             keyEvents[row][col].state = KS_UP;
-            Serial.printf("KS_UP row:%d col:%d time:%d\n\n", row, col,
-                          matrixTick);
+            Serial.printf("KS_UP row:%d col:%d time:%d keycode:%d\n\n", row,
+                          col, matrixTick, keycode);
             if (keycode == DEBUG) {
               sleepDebug = 0;
             } else {
@@ -609,37 +650,94 @@ void encoderTask(void *pvParameters) {
   }
 }
 
-void setup() {
-  u8x8.begin();
-  u8x8.clearBuffer();
-  u8x8.setPowerSave(0);
-  u8x8.setContrast(1);
-  u8x8.setFont(u8g2_font_siji_t_6x10);
-  u8x8.drawGlyph(0, 32, 0xe020);
+void u8x8start(uint8_t _stage) {
+  switch (_stage) {
+    case 0:
+      u8x8.begin();
+      u8x8.clearBuffer();
+      u8x8.setPowerSave(0);
+      u8x8.setContrast(1);
+      u8x8.setFont(u8g2_font_streamline_all_t);
+      u8x8.drawGlyph(5, 83, 0x0093);
+      break;
+    case 1:
+      u8x8.setFont(u8g2_font_streamline_all_t);
+      u8x8.drawGlyph(5, 62, 0x0083);
+      break;
+    case 2:
+      u8x8.setFont(u8g2_font_streamline_all_t);
+      u8x8.drawGlyph(5, 26, 0x0091);
+      break;
+    case 3:
+      u8x8.clearBuffer();
+      u8x8.setFont(u8g2_font_streamline_all_t);
+      u8x8.drawGlyph(5, 43, 0x018d);
+      u8x8.drawGlyph(5, 83, 0x0164);
+      break;
+
+    default:
+      break;
+  }
   u8x8.sendBuffer();
   u8x8.refreshDisplay();
-  rtc_matrix_deinit();
-  Serial.begin(115200);
-  delay(1000);
-  u8x8.drawGlyph(12, 32, 0xe097);
-  u8x8.sendBuffer();
-  delay(500);
-  u8x8.drawGlyph(24, 32, 0xe097);
-  u8x8.sendBuffer();
-  u8x8.refreshDisplay();
-  Serial.println("Starting MMK");
+}
+
+void eepromStart() {
   EEPROM.begin(4);
   deviceChose = EEPROM.read(0);
-  if (deviceChose > 2) {
+  if (deviceChose > (maxBTdev - 1)) {
     deviceChose = 0;
     EEPROM.write(0, deviceChose);
   }
   esp_base_mac_addr_set(&MACAddress[deviceChose][0]);
+}
+
+uint8_t checkKey(uint16_t _key) {
+  uint16_t _cur = 0;
+  gpio_set_level(rowPins[0], 1);
+  for (int n = 0; n < 2000; n++) {
+    _cur = 0;
+    for (uint8_t col = 0; col < MATRIX_COLS; col++) {
+      _cur |= (gpio_get_level(colPins[col]) << col);
+    }
+    if (_cur == _key) {
+      return (1);
+    }
+    delay(1);
+  }
+  return (0);
+}
+
+void checkOK() {
+  if (checkKey(0)) {
+    if (checkKey(256)) {
+      if (checkKey(0)) {
+        return;
+      }
+    }
+  }
+  rtc_matrix_setup();
+  u8x8.setPowerSave(1);
+  esp_deep_sleep_start();
+}
+
+void setup() {
+  u8x8start(0);
+  rtc_matrix_deinit();
+  Serial.begin(115200);
+  delay(500);
+  u8x8start(1);
+  delay(500);
+  u8x8start(2);
+  Serial.printf("\nStarting MMK %s\n", VERSION_SHORT);
+  eepromStart();
   bleKeyboard.setName(GATTS_TAG);
   bleKeyboard.begin();
-  // bleMouse.begin();
   matrixSetup();
   encoderSetup();
+  delay(1000);
+  u8x8start(3);
+  checkOK();
   xTaskCreate(&keyboardTask, "keyboard task", 2048, NULL, 5, NULL);
   xTaskCreate(&WifiTask, "wifi task", 2048, NULL, 5, NULL);
   xTaskCreate(&otaTask, "OTA task", 2048, NULL, 5, NULL);
@@ -678,17 +776,20 @@ void loop(void) {
       u8x8.setPowerSave(powerSave);
       Serial.println("Display on");
     }
-    if (tmOut > SLEEP_DISPLAY) {
-      if (powerSave != 1) {
+    if ((tmOut > SLEEP_DISPLAY) | (powerOff == 1)) {
+      if ((powerSave != 1) & (powerOff != 1)) {
         powerSave = 1;
         u8x8.setPowerSave(powerSave);
         Serial.println("Display off");
       }
-      if (tmOut > SLEEP_CPU) {
+      if ((tmOut > SLEEP_CPU) | (powerOff == 1)) {
+        oledDraw(3);
         rtc_matrix_setup();
         Serial.println("Going to sleep now");
         Serial.flush();
-        delay(1000);
+        delay(3000);
+        u8x8.setPowerSave(1);
+        Serial.println("bye ..");
         esp_deep_sleep_start();
         Serial.println("Wake up from sleep");
         esp_restart();
@@ -696,7 +797,16 @@ void loop(void) {
         powerSave = 2;
       }
     } else {
-      drawOled();
+      bleKeyboard.setBatteryLevel(getBatteryLevel());
+      if (otaUpdate) {
+        oledDraw(1);
+      } else {
+        if (sleepDebug == 1) {
+          oledDraw(2);
+        } else {
+          oledDraw();
+        }
+      }
     }
     fps = 0;
   }

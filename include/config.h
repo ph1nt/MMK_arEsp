@@ -40,9 +40,9 @@
 #define GATTS_TAG "MMK V0.5"  // The device's name
 #define MAX_BT_DEVICENAME_LENGTH 40
 #define SLEEP_DISPLAY 600  // 60 seconds to power off display
-#define SLEEP_CPU 3000     // 5 min
-#define MODTAP_TIME 150
-#define DEBOUNCE 2  // debounce time in ms
+#define SLEEP_CPU 30000    // 50 min
+#define MODTAP_TIME 200    // mod_tap time
+#define DEBOUNCE 2         // debounce time in ms
 
 #define CHECK_BIT(var, pos) ((var) & (1 << (pos)))
 #define SET_BIT(var, pos) (var |= 1 << pos);
@@ -119,6 +119,7 @@ uint8_t curLayer = 0;
 #define GUI_ESC MT(MOD_RGUI, KC_ESC)
 #define SPC_ALT MT(MOD_LALT, KC_SPACE)
 #define TAB_CTL MT(MOD_LCTL, KC_TAB)
+#define KC_SPWR KC_SYSTEM_POWER
 keyevent_t keyEvents[MATRIX_ROWS][MATRIX_COLS] = {};
 /*
  * Mod bits:    43210
@@ -139,7 +140,7 @@ uint16_t keyMap[MATRIX_LAYERS][MATRIX_ROWS][MATRIX_COLS] = {
      {KC_Z,   KC_X,   KC_C,   KC_V,   KC_B,   KC_N,   KC_M,   KC_COMM,KC_DOT, KC_SLSH},
      {Funct,  TAB_CTL,KC_LGUI,XXXXX,  ENT_SFT,SPC_ALT,XXXXX,  Number, GUI_ESC,KC_RALT}},
     // Symbol,
-    {{KC_NO,  KC_NO,  KC_NO,  KC_NO,  KC_NO,  KC_NO,  KC_NO,  KC_NO,  KC_NO,  KC_NO},
+    {{KC_NO,  KC_NO,  KC_NO,  KC_NO, KC_SPWR,KC_NO,  KC_NO,  KC_NO,  KC_NO,  KC_NO},
      {KC_NO,  KC_MPLY,KC_MPRV,KC_MNXT,KC_NO,  KC_NO,  KC_NO,  KC_NO,  KC_NO,  KC_NO},
      {KC_GRV ,KC_MUTE,KC_VOLD,KC_VOLU,KC_NO,  DEBUG,  KC_NO,  BT_1,   BT_2,   BT_3},
      {Funct,  TAB_CTL,KC_LGUI,XXXXX,  ENT_SFT,SPC_ALT,XXXXX,  Number, GUI_ESC,KC_RALT}},
