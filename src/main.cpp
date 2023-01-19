@@ -408,17 +408,6 @@ void matrixProces() {
             }
           } else {
             keyEvents[row][col].state = KS_TAP;
-            for (uint8_t _row = 0; _row < MATRIX_ROWS; _row++) {
-              for (uint8_t _col = 0; _col < MATRIX_COLS; _col++) {
-                // if modtap key is pressed and time not elapsed
-                if (keyEvents[_row][_col].state == KS_DOWN) {
-                  if ((keyMap[curLayer][_row][_col] && 0x2000) != 0) {
-                    keyEvents[_row][_col].state = KS_HOLD;
-                    matrixPress(keyMap[curLayer][_row][_col], 1);
-                  }
-                }
-              }
-            }
             Serial.printf("KS_TAP row:%d col:%d time:%d keycode:%d\n\n", row,
                           col, matrixTick, keycode);
           }
