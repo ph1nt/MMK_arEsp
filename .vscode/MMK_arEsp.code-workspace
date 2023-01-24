@@ -1,0 +1,63 @@
+{
+    "folders": [
+        {
+            "path": ".."
+        }
+    ],
+    "settings": {
+        "workbench.colorCustomizations": {
+            "titleBar.activeBackground": "#7e1212" // change this color!
+        },
+        "files.associations": {
+            "*.tcc": "cpp",
+            "ctime": "cpp",
+            "iomanip": "cpp",
+            "limits": "cpp",
+            "numeric": "cpp",
+            "streambuf": "cpp",
+            "tuple": "cpp",
+            "type_traits": "cpp",
+            "utility": "cpp",
+            "exception": "cpp",
+            "fstream": "cpp",
+            "iosfwd": "cpp",
+            "new": "cpp",
+            "ostream": "cpp",
+            "sstream": "cpp",
+            "array": "cpp",
+            "atomic": "cpp",
+            "cctype": "cpp",
+            "clocale": "cpp",
+            "cmath": "cpp",
+            "cstdarg": "cpp",
+            "cstddef": "cpp",
+            "cstdint": "cpp",
+            "cstdio": "cpp",
+            "cstdlib": "cpp",
+            "cstring": "cpp",
+            "cwchar": "cpp",
+            "cwctype": "cpp",
+            "deque": "cpp",
+            "list": "cpp",
+            "unordered_map": "cpp",
+            "unordered_set": "cpp",
+            "vector": "cpp",
+            "algorithm": "cpp",
+            "functional": "cpp",
+            "iterator": "cpp",
+            "map": "cpp",
+            "memory": "cpp",
+            "memory_resource": "cpp",
+            "optional": "cpp",
+            "random": "cpp",
+            "string": "cpp",
+            "string_view": "cpp",
+            "system_error": "cpp",
+            "initializer_list": "cpp",
+            "istream": "cpp",
+            "stdexcept": "cpp",
+            "cinttypes": "cpp",
+            "typeinfo": "cpp"
+        }
+    }
+}
