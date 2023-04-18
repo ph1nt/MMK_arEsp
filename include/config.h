@@ -43,6 +43,9 @@
 #define SLEEP_CPU 30000    // 50 min
 #define MODTAP_TIME 200    // mod_tap time
 #define DEBOUNCE 2         // debounce time in ms
+#define BASE_LAYER 0
+#define KEYBOARD_REPORT_SIZE (8)
+#define CONSUMER_REPORT_SIZE (1)
 
 #define CHECK_BIT(var, pos) ((var) & (1 << (pos)))
 #define SET_BIT(var, pos) (var |= 1 << pos);
@@ -88,6 +91,13 @@ typedef struct {
   uint64_t time_debounce;
   uint64_t time_press;
 } keyevent_t;
+typedef struct {
+  keypos_t pos;
+  uint8_t state;
+  uint8_t tap;
+  uint8_t mod;
+  uint64_t time;
+} keypressed_t;
 
 // ESP32Time rtc;
 ESP32Time rtc(0);  // offset in seconds GMT+2, for ntp 0?
@@ -120,6 +130,18 @@ uint8_t curLayer = 0;
 #define SPC_ALT MT(MOD_LALT, KC_SPACE)
 #define TAB_CTL MT(MOD_LCTL, KC_TAB)
 #define KC_SPWR KC_SYSTEM_POWER
+// GASC/◆⎇⇧⎈
+#define KM_A MT(MOD_LGUI, KC_A)
+#define KM_S MT(MOD_LALT, KC_S)
+#define KM_D MT(MOD_LSFT, KC_D)
+#define KM_F MT(MOD_LCTL, KC_F)
+#define KM_G LT(2, KC_G)
+#define KM_H LT(2, KC_H)
+#define KM_J MT(MOD_RCTL, KC_J)
+#define KM_K MT(MOD_RSFT, KC_K)
+#define KM_L MT(MOD_RALT, KC_L)
+#define KM_SCLN MT(MOD_RGUI, KC_SCLN)
+
 keyevent_t keyEvents[MATRIX_ROWS][MATRIX_COLS] = {};
 /*
  * Mod bits:    43210
@@ -136,7 +158,7 @@ keyevent_t keyEvents[MATRIX_ROWS][MATRIX_COLS] = {};
 // clang-format off
 uint16_t keyMap[MATRIX_LAYERS][MATRIX_ROWS][MATRIX_COLS] = {
     {{KC_Q,   KC_W,   KC_E,   KC_R,   KC_T,   KC_Y,   KC_U,   KC_I,   KC_O,   KC_P},
-     {KC_A,   KC_S,   KC_D,   KC_F,   KC_G,   KC_H,   KC_J,   KC_K,   KC_L,   KC_SCLN},
+     {KM_A,   KM_S,   KM_D,   KM_F,   KM_G,   KM_H,   KM_J,   KM_K,   KM_L,   KM_SCLN},
      {KC_Z,   KC_X,   KC_C,   KC_V,   KC_B,   KC_N,   KC_M,   KC_COMM,KC_DOT, KC_SLSH},
      {Funct,  TAB_CTL,KC_LGUI,XXXXX,  ENT_SFT,SPC_ALT,XXXXX,  Number, GUI_ESC,KC_RALT}},
     // Symbol,
