@@ -77,6 +77,9 @@ uint8_t MACAddress[maxBTdev][6] = {{0x14, 0x88, 0xE6, 0x08, 0x3D, 0x03},
                                    {0x31, 0xAE, 0xAC, 0x42, 0x0A, 0x31}};
 
 enum keyState { KS_UP = 0, KS_DOWN, KS_HOLD, KS_TAP, KS_DTAP, KS_RELASE };
+uint8_t keysState[4][10];
+uint64_t keysPress[4][10];
+
 /* key matrix position */
 typedef struct {
   uint8_t col;
@@ -117,7 +120,9 @@ KeyReport releaseReport = {0};
 uint8_t powerSave = 0;
 uint64_t msec, lsec = 0;
 uint64_t matrixTick = 0;
+uint8_t _curLayer = 0;
 uint8_t curLayer = 0;
+uint8_t _modifiers = 0;
 #define XXXXX KC_NO
 #define LT(layer, kc) (0x8000 | (((layer)&0xF) << 8) | ((kc)&0xFF))
 #define MT(mod, kc) (0x2000 | (((mod)&0x1F) << 8) | ((kc)&0xFF))
