@@ -408,6 +408,7 @@ void keysProcess() {
         case KS_DOWN:  // check mod/tap
           if ((matrixTick - keysPress[_row][_col]) > MODTAP_TIME) {
             keysState[_row][_col] = KS_HOLD;
+            Serial.printf("HOLD col:%D row:%d\n", _col, _row);
           }
           break;
         case KS_HOLD:
@@ -415,11 +416,13 @@ void keysProcess() {
           break;
         case KS_TAP:
           // TODO all mod/tap to mod, send key
+          keysState[_row][_col] = KS_RELASE;
+          Serial.printf("TAP col:%D row:%d\n", _col, _row);
           break;
-
         case KS_RELASE:
           // TODO unpresss key
           keysState[_row][_col] = KS_UP;
+          Serial.printf("RELEASE col:%D row:%d\n", _col, _row);
           break;
 
         default:
@@ -717,7 +720,7 @@ void keyboardTask(void *pvParameters) {
   while (1) {
     if (!otaUpdate) {
       matrixScan();
-      matrixProces();
+      // xqmatrixProces();
       if (matrixChange == 1) {
         matrixChange = 0;
         tmOut = 0;
