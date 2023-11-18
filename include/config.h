@@ -124,12 +124,10 @@ uint8_t _curLayer = 0;
 uint8_t curLayer = 0;
 uint8_t _modifiers = 0;
 #define XXXXX KC_NO
-#define LT(layer, kc) (0x8000 | (((layer) & 0xF) << 8) | ((kc) & 0xFF))
-#define MT(mod, kc) (0x2000 | (((mod) & 0x1F) << 8) | ((kc) & 0xFF))
 #define TO(layer) (0x8000 | (((layer) & 0xF) << 8))
-#define Symbol LT(1, KC_NO)
-#define Number LT(2, KC_BSPACE)
-#define Funct LT(3, KC_NO)
+#define Symbol TO(1)
+#define Number TO(2)
+#define Funct TO(3)
 #define KC_SPWR KC_SYSTEM_POWER
 
 keyevent_t keyEvents[MATRIX_ROWS][MATRIX_COLS] = {};
