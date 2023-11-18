@@ -374,6 +374,7 @@ void matrixSetup(void) {
     }
   }
 }
+
 void keysSend() {
   /*
     bleKeyboard.sendReport(report);
@@ -491,6 +492,7 @@ void matrixPress(uint16_t keycode, uint8_t _hold) {
     }
   }
 }
+
 // Keyboard state array initialize
 void keyboardSetup() {
   for (uint8_t row = 0; row < MATRIX_ROWS; row++) {
@@ -678,7 +680,7 @@ uint8_t checkKey(uint16_t _key) {
   return (0);
 }
 
-void checkOK() {
+void checkOK() {  // check if KB_O pressed if no go to sleep
   if (checkKey(0)) {
     if (checkKey(256)) {
       if (checkKey(0)) {
@@ -713,26 +715,30 @@ void setup() {
   xTaskCreate(&encoderTask, "encoder task", 2048, NULL, 5, NULL);
 }
 
+void bleSendReport() {
+  if (reportReady > 0) {
+    Serial.printf("reportReady = %d ", reportReady);
+    bleKeyboard.sendReport(&report);
+    for (uint8_t i = 0; i < 6; i++) {
+      if (report.keys[i] == releaseReport.keys[i]) {
+        releaseReport.keys[i] = 0x00;
+        report.keys[i] = 0x00;
+      }
+    }
+    delay(9);
+    bleKeyboard.sendReport(&report);
+    Serial.printf("reportReady = %d\n", reportReady);
+    reportReady = 0;
+  }
+}
+
 void loop(void) {
   msec = esp_timer_get_time();
   fps++;
   if ((msec - lsec) > uint64_t(100000)) {  // every 0.1 mili second
     lsec = msec;
     tmOut++;
-    if (reportReady > 0) {
-      Serial.printf("reportReady = %d ", reportReady);
-      bleKeyboard.sendReport(&report);
-      for (uint8_t i = 0; i < 6; i++) {
-        if (report.keys[i] == releaseReport.keys[i]) {
-          releaseReport.keys[i] = 0x00;
-          report.keys[i] = 0x00;
-        }
-      }
-      delay(9);
-      bleKeyboard.sendReport(&report);
-      Serial.printf("reportReady = %d\n", reportReady);
-      reportReady = 0;
-    }
+    bleSendReport();
     if ((powerSave == 2) || ((powerSave == 1) && (tmOut == 1))) {
       powerSave = 0;
       u8x8.setPowerSave(powerSave);
