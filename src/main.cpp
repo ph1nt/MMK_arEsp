@@ -234,9 +234,11 @@ void keyProcess(uint8_t _row, uint8_t _col, uint8_t _curState) {
   if (keycode != DEBUG) {
     // TODO
   }
+  Serial.printf("%d >> ", _curState);
   if (_curState) {
     if (keycode & 0x8000) {
       curLayer = ((keycode & 0x0F00) >> 8);
+      Serial.printf("layer change to: %d\n", curLayer);
     }
     // consumer control key
     if ((keycode & 0x4000) || ((keycode >= 168) && (keycode <= 174))) {
@@ -248,9 +250,11 @@ void keyProcess(uint8_t _row, uint8_t _col, uint8_t _curState) {
     }
     if ((keycode >= KC_LCTRL) && (keycode <= KC_RGUI)) {
       report.modifiers |= (1 << (keycode - KC_LCTRL));
+      reportReady = 1;
     } else {
       k = (keycode & 0x00FF);
     }
+    Serial.printf("keycode: %d\n", k);
     if (k != 0) {
       if ((report.keys[0] != k) && (report.keys[1] != k) &&
           (report.keys[2] != k) && (report.keys[3] != k) &&
@@ -258,6 +262,7 @@ void keyProcess(uint8_t _row, uint8_t _col, uint8_t _curState) {
         for (uint8_t i = 0; i < 6; i++) {
           if (report.keys[i] == 0x00) {
             report.keys[i] = k;
+            reportReady = 1;
             break;
           }
         }
@@ -280,10 +285,12 @@ void keyProcess(uint8_t _row, uint8_t _col, uint8_t _curState) {
     for (uint8_t i = 0; i < 6; i++) {
       if (0 != k && report.keys[i] == k) {
         releaseReport.keys[i] = k;
+        reportReady = 1;
       }
     }
     if ((keycode >= KC_LCTRL) && (keycode <= KC_RGUI)) {
       report.modifiers &= !(1 << (keycode - KC_LCTRL));
+      reportReady = 1;
     }
   }
 }
@@ -302,6 +309,7 @@ void matrixScan() {
         // DEBUG
         Serial.printf("!=curState row:%d, col:%d, time:%d, state:%d\n", row,
                       col, matrixTick, curState);
+        Serial.printf("LAST STATE %d  ", keyEvents[row][col].curState);
       }
       if ((matrixTick - keyEvents[row][col].time_debounce) > DEBOUNCE) {
         if (keyEvents[row][col].pressed != curState) {
@@ -310,7 +318,7 @@ void matrixScan() {
           matrixChange = 1;
           keyEvents[row][col].pressed = curState;
           // TODO call keyboard process
-          keyProcess(row, col, curState);
+          keyProcess(row, col, keyEvents[row][col].curState);
         }
       }
       keyEvents[row][col].curState = curState;
