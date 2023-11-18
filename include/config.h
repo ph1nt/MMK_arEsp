@@ -127,25 +127,10 @@ uint8_t _modifiers = 0;
 #define LT(layer, kc) (0x8000 | (((layer) & 0xF) << 8) | ((kc) & 0xFF))
 #define MT(mod, kc) (0x2000 | (((mod) & 0x1F) << 8) | ((kc) & 0xFF))
 #define TO(layer) (0x8000 | (((layer) & 0xF) << 8))
-#define Symbol LT(1, KC_DEL)
+#define Symbol LT(1, KC_NO)
 #define Number LT(2, KC_BSPACE)
-#define Funct LT(3, KC_NUBS)
-#define ENT_SFT MT(MOD_LSFT, KC_ENTER)
-#define GUI_ESC MT(MOD_RGUI, KC_ESC)
-#define SPC_ALT MT(MOD_LALT, KC_SPACE)
-#define TAB_CTL MT(MOD_LCTL, KC_TAB)
+#define Funct LT(3, KC_NO)
 #define KC_SPWR KC_SYSTEM_POWER
-// GASC/◆⎇⇧⎈
-#define KM_A MT(MOD_LGUI, KC_A)
-#define KM_S MT(MOD_LALT, KC_S)
-#define KM_D MT(MOD_LSFT, KC_D)
-#define KM_F MT(MOD_LCTL, KC_F)
-#define KM_G LT(2, KC_G)
-#define KM_H LT(2, KC_H)
-#define KM_J MT(MOD_RCTL, KC_J)
-#define KM_K MT(MOD_RSFT, KC_K)
-#define KM_L MT(MOD_RALT, KC_L)
-#define KM_SCLN MT(MOD_RGUI, KC_SCLN)
 
 keyevent_t keyEvents[MATRIX_ROWS][MATRIX_COLS] = {};
 /*
@@ -163,7 +148,7 @@ keyevent_t keyEvents[MATRIX_ROWS][MATRIX_COLS] = {};
 // clang-format off
 uint16_t keyMap[MATRIX_LAYERS][MATRIX_ROWS][MATRIX_COLS] = {
     {{KC_Q,   KC_W,   KC_E,   KC_R,   KC_T,   KC_Y,   KC_U,   KC_I,   KC_O,   KC_P},
-     {KM_A,   KM_S,   KM_D,   KM_F,   KM_G,   KM_H,   KM_J,   KM_K,   KM_L,   KM_SCLN},
+     {KC_A,   KC_S,   KC_D,   KC_F,   KC_G,   KC_H,   KC_J,   KC_K,   KC_L,   KC_SCLN},
      {KC_Z,   KC_X,   KC_C,   KC_V,   KC_B,   KC_N,   KC_M,   KC_COMM,KC_DOT, KC_SLSH},
      {Funct,  KC_LCTL,KC_LGUI,XXXXX,  KC_LALT,KC_SPC, XXXXX,  Number, KC_RSFT,KC_RALT}},
     // Symbol,
