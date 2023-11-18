@@ -124,9 +124,9 @@ uint8_t _curLayer = 0;
 uint8_t curLayer = 0;
 uint8_t _modifiers = 0;
 #define XXXXX KC_NO
-#define LT(layer, kc) (0x8000 | (((layer)&0xF) << 8) | ((kc)&0xFF))
-#define MT(mod, kc) (0x2000 | (((mod)&0x1F) << 8) | ((kc)&0xFF))
-#define TO(layer) (0x8000 | (((layer)&0xF) << 8))
+#define LT(layer, kc) (0x8000 | (((layer) & 0xF) << 8) | ((kc) & 0xFF))
+#define MT(mod, kc) (0x2000 | (((mod) & 0x1F) << 8) | ((kc) & 0xFF))
+#define TO(layer) (0x8000 | (((layer) & 0xF) << 8))
 #define Symbol LT(1, KC_DEL)
 #define Number LT(2, KC_BSPACE)
 #define Funct LT(3, KC_NUBS)
@@ -165,23 +165,23 @@ uint16_t keyMap[MATRIX_LAYERS][MATRIX_ROWS][MATRIX_COLS] = {
     {{KC_Q,   KC_W,   KC_E,   KC_R,   KC_T,   KC_Y,   KC_U,   KC_I,   KC_O,   KC_P},
      {KM_A,   KM_S,   KM_D,   KM_F,   KM_G,   KM_H,   KM_J,   KM_K,   KM_L,   KM_SCLN},
      {KC_Z,   KC_X,   KC_C,   KC_V,   KC_B,   KC_N,   KC_M,   KC_COMM,KC_DOT, KC_SLSH},
-     {Funct,  TAB_CTL,KC_LGUI,XXXXX,  ENT_SFT,SPC_ALT,XXXXX,  Number, GUI_ESC,KC_RALT}},
+     {Funct,  KC_LCTL,KC_LGUI,XXXXX,  KC_LALT,KC_SPC, XXXXX,  Number, KC_RSFT,KC_RALT}},
     // Symbol,
-    {{KC_NO,  KC_NO,  KC_NO,  KC_NO, KC_SPWR,KC_NO,  KC_NO,  KC_NO,  KC_NO,  KC_NO},
-     {KC_NO,  KC_MPLY,KC_MPRV,KC_MNXT,KC_NO,  KC_NO,  KC_NO,  KC_NO,  KC_NO,  KC_NO},
-     {KC_GRV ,KC_MUTE,KC_VOLD,KC_VOLU,KC_NO,  DEBUG,  KC_NO,  BT_1,   BT_2,   BT_3},
-     {Funct,  TAB_CTL,KC_LGUI,XXXXX,  ENT_SFT,SPC_ALT,XXXXX,  Number, GUI_ESC,KC_RALT}},
+    {{KC_NO,  KC_NO,  KC_NO,  KC_NO,  KC_SPWR,KC_NO,  KC_NO,  KC_NO,  KC_NO,  KC_NO},
+     {KC_NO,  KC_NO,  KC_NO,  KC_NO,  KC_NO,  KC_NO,  KC_NO,  KC_NO,  KC_NO,  KC_NO},
+     {KC_NO,  KC_NO,  KC_NO,  KC_NO,  KC_NO,  DEBUG,  KC_NO,  BT_1,   BT_2,   BT_3},
+     {Funct,  KC_LCTL,KC_LGUI,XXXXX,  KC_LALT,KC_SPC, XXXXX,  Number, KC_RSFT,KC_RALT}},
     // Number
     {{KC_1,   KC_2,   KC_3,   KC_4,   KC_5,   KC_6,   KC_7,   KC_8,   KC_9,   KC_0},
-     {KC_TAB, KC_MS_L,KC_MS_D,KC_MS_U,KC_MS_R,KC_LEFT,KC_DOWN,KC_UP,  KC_RIGHT,KC_QUOT},
-     {KC_NUBS,KC_GRV, KC_BTN1,KC_BTN3,KC_BTN2,KC_HOME,KC_PGDN,KC_PGUP,KC_END, KC_BSLS},
-     {Symbol, TAB_CTL,KC_LGUI,XXXXX,  ENT_SFT,SPC_ALT,XXXXX,  Number, GUI_ESC,KC_RALT}},
+     {KC_TAB, KC_MPLY,KC_MPRV,KC_MNXT,KC_MUTE,KC_DOWN,KC_UP,  KC_RIGHT,KC_QUOT},
+     {KC_NUBS,KC_GRV, KC_VOLD,KC_VOLU,KC_NO,  KC_HOME,KC_PGDN,KC_PGUP,KC_END, KC_BSLS},
+     {Symbol, KC_LCTL,KC_LGUI,XXXXX,  KC_LALT,KC_SPC, XXXXX,  Number, KC_RSFT,KC_RALT}},
     // Function
     {{KC_ESC, KC_NO,  KC_NO,  KC_NO,  KC_NO,  KC_LBRC,KC_RBRC,KC_MINS,KC_EQUAL,KC_BSPACE},
      {KC_F1,  KC_F2,  KC_F3,  KC_F4,  KC_F5,  KC_LEFT,KC_DOWN,KC_UP,  KC_RIGHT,KC_ENTER},
      {KC_F6,  KC_F7,  KC_F8,  KC_F9,  KC_F10, KC_F11, KC_F12, KC_F13, KC_F14, KC_F15},
-     {Funct,  TAB_CTL,KC_LGUI,XXXXX,  ENT_SFT,SPC_ALT,XXXXX,  Symbol, GUI_ESC,KC_RALT}}};
-// clang-format on q
+     {Funct,  KC_LCTL,KC_LGUI,XXXXX,  KC_LALT,KC_SPC, XXXXX,  Symbol, KC_RSFT,KC_RALT}}};
+// clang-format on
 
 #define cat_width 32
 #define cat_height 32

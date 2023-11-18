@@ -1,6 +1,8 @@
 #include <Arduino.h>
 #include <config.h>
 
+// This version don't have mod_tap and ota functionality
+
 #define Xpos(_col) (6 * _col)
 #define Ypos(_row) (12 * _row)
 #define posY(_row) (127 - Ypos(_row))
@@ -9,10 +11,6 @@ U8G2_SSD1306_128X32_UNIVISION_F_HW_I2C u8x8(U8G2_R3, /* reset=*/U8X8_PIN_NONE,
                                             /* clock=*/OLED_SCL_PIN,
                                             /* data=*/OLED_SDA_PIN);
 BleKeyboard bleKeyboard(GATTS_TAG, "HNA", 100);
-
-boolean otaUpdate = false;
-unsigned int otaProgress = 0;
-unsigned int otaTotal = 30;
 
 class Keys {
 #define _pressedSize 10
@@ -262,18 +260,6 @@ void rtc_matrix_setup(void) {
   }
 }
 
-void oledOta() {
-  char tmpStr[8];
-  u8x8.drawGlyphX2(4, 40 + 2 * (rtc.getSecond() % 10), 0xe061);
-  u8x8.drawGlyphX2(4, 80, 0xe028);
-  if (otaTotal != 0) {
-    sprintf(tmpStr, "%d%%", (100 * otaProgress / otaTotal));
-    u8x8.drawStr(4, 100, tmpStr);
-    sprintf(tmpStr, "%dk", uint16_t(otaTotal / 1024));
-    u8x8.drawStr(0, 120, tmpStr);
-  }
-}
-
 void oledDebug() {
   u8x8.setDisplayRotation(U8G2_R0);
   u8x8.drawStr(0, 10, "batt:");
@@ -302,7 +288,6 @@ void oledDraw(uint8_t _stage = 0) {
   u8x8.setFont(u8g2_font_siji_t_6x10);
   switch (_stage) {
     case 1:
-      oledOta();
       break;
     case 2:
       oledDebug();
@@ -398,73 +383,6 @@ void keysSend() {
   */
 }
 
-void keysProcess() {
-  for (uint8_t _row = 0; _row < MATRIX_ROWS; _row++) {
-    for (uint8_t _col = 0; _col < MATRIX_COLS; _col++) {
-      switch (keysState[_row][_col]) {
-        // = 0, KS_DOWN, KS_HOLD, KS_TAP, KS_DTAP, KS_RELASE
-        case KS_UP:  // relax
-          break;
-        case KS_DOWN:  // check mod/tap
-          if ((matrixTick - keysPress[_row][_col]) > MODTAP_TIME) {
-            keysState[_row][_col] = KS_HOLD;
-            Serial.printf("HOLD col:%D row:%d\n", _col, _row);
-          }
-          break;
-        case KS_HOLD:
-          // TODO report BLE press
-          break;
-        case KS_TAP:
-          // TODO all mod/tap to mod, send key
-          keysState[_row][_col] = KS_RELASE;
-          Serial.printf("TAP col:%D row:%d\n", _col, _row);
-          break;
-        case KS_RELASE:
-          // TODO unpresss key
-          keysState[_row][_col] = KS_UP;
-          Serial.printf("RELEASE col:%D row:%d\n", _col, _row);
-          break;
-
-        default:
-          break;
-      }
-    }
-  }
-  keysSend();
-}
-
-// process press or release key
-void keyProcess(uint8_t _row, uint8_t _col, uint8_t _state) {
-  if (_state) {
-    // key pressed
-    switch (keysState[_row][_col]) {
-      // = 0, KS_DOWN, KS_HOLD, KS_TAP, KS_DTAP, KS_RELASE
-      case KS_UP:  // key_down
-        keysState[_row][_col] = KS_DOWN;
-        keysPress[_row][_col] = matrixTick;
-        break;
-
-      default:
-        break;
-    }
-  } else {
-    // key released
-    switch (keysState[_row][_col]) {
-      case KS_HOLD:
-        // TODO report BLE release
-        keysState[_row][_col] = KS_RELASE;
-        break;
-      case KS_DOWN:  // KS_TAP
-        // TODO report BLE press
-        keysState[_row][_col] = KS_TAP;
-        break;
-
-      default:
-        break;
-    }
-  }
-}
-
 // Scanning physical keys matrix
 void matrixScan() {
   uint8_t curState = 0;
@@ -487,14 +405,14 @@ void matrixScan() {
           matrixChange = 1;
           keyEvents[row][col].pressed = curState;
           // TODO call keyboard process
-          keyProcess(row, col, curState);
+          // keyProcess(row, col, curState);
         }
       }
       keyEvents[row][col].curState = curState;
     }
     gpio_set_level(rowPins[row], 0);
   }
-  keysProcess();
+  // keysProcess();
 }
 
 const uint8_t mediacode[] = {16, 32, 64, 1, 2, 4, 8};
@@ -573,137 +491,6 @@ void matrixPress(uint16_t keycode, uint8_t _hold) {
     }
   }
 }
-
-void matrixRelease(uint16_t keycode) {
-  // TODO mod release
-  if (keycode != DEBUG) {
-    uint8_t k;
-    uint8_t mediaReport[2] = {0, 0};
-    if (keycode & 0x8000) {
-      curLayer = 0;
-    }
-    if ((keycode & 0x4000) || ((keycode >= 168) && (keycode <= 174))) {
-      mediaReport[0] = mediacode[(keycode & 0x00FF) - 168];
-      bleKeyboard.release(mediaReport);
-      return;
-    } else {
-      if (keycode & 0x1F00) {
-        report.modifiers &=
-            ~((keycode & 0x0F00) >> (4 + 4 * (keycode & 0x1000)));
-      }
-      k = (keycode & 0x00FF);
-      for (uint8_t i = 0; i < 6; i++) {
-        if (0 != k && report.keys[i] == k) {
-          releaseReport.keys[i] = k;
-        }
-      }
-      if ((keycode >= KC_LCTRL) && (keycode <= KC_RGUI)) {
-        report.modifiers &= !(1 << (keycode - KC_LCTRL));
-      }
-    }
-  }
-}
-
-// press >time> hold; release tap >time> release
-void matrixProces() {
-  uint16_t keycode;
-  for (uint8_t row = 0; row < MATRIX_ROWS; row++) {
-    for (uint8_t col = 0; col < MATRIX_COLS; col++) {
-      keycode = keyMap[curLayer][row][col];  // TODO transparent
-      switch (keyEvents[row][col].state) {
-        case KS_UP:
-          if (keyEvents[row][col].pressed == 1) {
-            keyEvents[row][col].state = KS_DOWN;
-            keyEvents[row][col].time_press = matrixTick;
-            Serial.printf("KS_DOWN keycode:%d row:%d col:%d time:%d\n", keycode,
-                          row, col, matrixTick);
-            if (keycode & 0x8000) {
-              _curLayer = ((keycode & 0x0F00) >> 8);
-            }
-            if (keycode & 0x2000) {
-              _modifiers |=
-                  ((keycode & 0x0F00) >> (4 + 4 * (keycode & 0x1000)));
-            }
-          }
-          break;
-        case KS_DOWN:
-          if (keyEvents[row][col].pressed == 1) {
-            if (matrixTick >
-                uint64_t(keyEvents[row][col].time_press + MODTAP_TIME)) {
-              keyEvents[row][col].state = KS_HOLD;
-              Serial.printf("KS_HOLD keycode:%d row:%d col:%d time:%d \n",
-                            keycode, row, col, matrixTick);
-              if ((keycode >= BT_1) && (keycode <= BT_3)) {
-                // reboot to select diffrent BT device
-                changeID(keycode - BT_1);
-              }
-              switch (keycode) {
-                case DEBUG:
-                  sleepDebug = 1;
-                  break;
-                case KC_SYSTEM_POWER:
-                  powerOff = 1;
-                  Serial.println("Power off..");
-                  break;
-
-                default:
-                  matrixPress(keycode, 1);
-                  break;
-              }
-            }
-          } else {
-            keyEvents[row][col].state = KS_TAP;
-            Serial.printf("KS_TAP row:%d col:%d time:%d keycode:%d\n\n", row,
-                          col, matrixTick, keycode);
-          }
-          break;
-        case KS_HOLD:
-          if (keyEvents[row][col].pressed == 0) {
-            keyEvents[row][col].state = KS_UP;
-            Serial.printf("KS_UP row:%d col:%d time:%d keycode:%d\n\n", row,
-                          col, matrixTick, keycode);
-            if (keycode == DEBUG) {
-              sleepDebug = 0;
-            } else {
-              matrixRelease(keycode);
-              reportReady++;
-            }
-          } else {
-            switch (keycode) {
-              case KC_MS_U:
-                bleKeyboard.move(0, -1);
-                break;
-              case KC_MS_D:
-                bleKeyboard.move(0, 1);
-                break;
-              case KC_MS_L:
-                bleKeyboard.move(-1, 0);
-                break;
-              case KC_MS_R:
-                bleKeyboard.move(1, 0);
-                break;
-            }
-          }
-          break;
-        case KS_TAP:
-          keyEvents[row][col].state = KS_RELASE;
-          matrixPress(keycode, 0);
-          reportReady++;
-          break;
-        case KS_RELASE: {
-          matrixRelease(keycode);
-          reportReady++;
-          keyEvents[row][col].state = KS_UP;
-        } break;
-        default:
-          Serial.println(
-              "Upss.. wrong keyEvents[row][col].state in matrixProcess()");
-          break;
-      }
-    }
-  }
-}
-
 // Keyboard state array initialize
 void keyboardSetup() {
   for (uint8_t row = 0; row < MATRIX_ROWS; row++) {
@@ -718,71 +505,21 @@ void keyboardSetup() {
 // Task for continually scaning keyboard
 void keyboardTask(void *pvParameters) {
   while (1) {
-    if (!otaUpdate) {
-      matrixScan();
-      // xqmatrixProces();
-      if (matrixChange == 1) {
-        matrixChange = 0;
-        tmOut = 0;
-        if (powerSave == 1) powerSave++;
-      }
+    matrixScan();
+    if (matrixChange == 1) {
+      matrixChange = 0;
+      tmOut = 0;
+      if (powerSave == 1) powerSave++;
     }
     vTaskDelay(1 / portTICK_PERIOD_MS);
   }
-}
-
-void otaTask(void *pvParameters) {
-  while (1) {
-    ArduinoOTA.handle();
-    vTaskDelay(9 / portTICK_PERIOD_MS);
-  }
-}
-
-void otaSetup() {
-  ArduinoOTA
-      .onStart([]() {
-        otaUpdate = true;
-        String type;
-        if (ArduinoOTA.getCommand() == U_FLASH)
-          type = "sketch";
-        else  // U_SPIFFS
-          type = "filesystem";
-        Serial.println("Start updating " + type);
-      })
-      .onEnd([]() {
-        otaUpdate = false;
-        Serial.println("\nEnd");
-      })
-      .onProgress([](unsigned int progress, unsigned int total) {
-        otaProgress = progress;
-        otaTotal = total;
-        Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
-      })
-      .onError([](ota_error_t error) {
-        otaUpdate = false;
-        Serial.printf("Error[%u]: ", error);
-        if (error == OTA_AUTH_ERROR)
-          Serial.println("Auth Failed");
-        else if (error == OTA_BEGIN_ERROR)
-          Serial.println("Begin Failed");
-        else if (error == OTA_CONNECT_ERROR)
-          Serial.println("Connect Failed");
-        else if (error == OTA_RECEIVE_ERROR)
-          Serial.println("Receive Failed");
-        else if (error == OTA_END_ERROR)
-          Serial.println("End Failed");
-      });
-  ArduinoOTA.setHostname("MMK");
-  // ArduinoOTA.setPassword("admin");
-  ArduinoOTA.begin();
-  Serial.println(WiFi.localIP());
 }
 
 void WifiTask(void *pvParameters) {
   while (1) {
     int16_t n = WiFi.scanNetworks();
     int16_t ni = 0;
-    if ((n > 0) && (!otaUpdate)) {
+    if (n > 0) {
       while (WiFi.status() != WL_CONNECTED) {
         for (int i = 0; i < WiFis; i++) {
           for (ni = 0; ni < n; ni++) {
@@ -790,7 +527,6 @@ void WifiTask(void *pvParameters) {
               WiFi.begin(ssid[i], password[i]);
               if (WiFi.waitForConnectResult() == WL_CONNECTED) {
                 configTime(3600, 00, "europe.pool.ntp.org");
-                otaSetup();
                 break;
               }
               WiFi.disconnect();
@@ -858,8 +594,8 @@ void encoderTask(void *pvParameters) {
           if (curLayer == 2) {
             bleKeyboard.move(0, 0, 1, 0);
           } else {
-            matrixPress(KC_F15, 0);
-            matrixRelease(KC_F15);
+            // matrixPress(KC_F15, 0);
+            // matrixRelease(KC_F15);
           }
         }
         break;
@@ -871,8 +607,8 @@ void encoderTask(void *pvParameters) {
           if (curLayer == 2) {
             bleKeyboard.move(0, 0, -1, 0);
           } else {
-            matrixPress(KC_F14, 0);
-            matrixRelease(KC_F14);
+            // matrixPress(KC_F14, 0);
+            // matrixRelease(KC_F14);
           }
         }
         break;
@@ -974,7 +710,6 @@ void setup() {
   checkOK();
   xTaskCreate(&keyboardTask, "keyboard task", 2048, NULL, 5, NULL);
   xTaskCreate(&WifiTask, "wifi task", 2048, NULL, 5, NULL);
-  xTaskCreate(&otaTask, "OTA task", 2048, NULL, 5, NULL);
   xTaskCreate(&encoderTask, "encoder task", 2048, NULL, 5, NULL);
 }
 
@@ -983,14 +718,7 @@ void loop(void) {
   fps++;
   if ((msec - lsec) > uint64_t(100000)) {  // every 0.1 mili second
     lsec = msec;
-    if (!otaUpdate) {
-      tmOut++;
-    } else {
-      if (powerSave == 1) {
-        powerSave = 2;
-      }
-    }
-    // ArduinoOTA.handle();
+    tmOut++;
     if (reportReady > 0) {
       Serial.printf("reportReady = %d ", reportReady);
       bleKeyboard.sendReport(&report);
@@ -1032,14 +760,10 @@ void loop(void) {
       }
     } else {
       bleKeyboard.setBatteryLevel(getBatteryLevel());
-      if (otaUpdate) {
-        oledDraw(1);
+      if (sleepDebug == 1) {
+        oledDraw(2);
       } else {
-        if (sleepDebug == 1) {
-          oledDraw(2);
-        } else {
-          oledDraw();
-        }
+        oledDraw();
       }
     }
     fps = 0;
