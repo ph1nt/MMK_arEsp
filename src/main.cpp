@@ -227,6 +227,67 @@ void keysSend() {
   */
 }
 
+const uint8_t mediacode[] = {16, 32, 64, 1, 2, 4, 8};
+void keyProcess(uint8_t _row, uint8_t _col, uint8_t _curState) {
+  uint8_t k = 0;
+  uint16_t keycode = keyMap[curLayer][_row][_col];
+  if (keycode != DEBUG) {
+    // TODO
+  }
+  if (_curState) {
+    if (keycode & 0x8000) {
+      curLayer = ((keycode & 0x0F00) >> 8);
+    }
+    // consumer control key
+    if ((keycode & 0x4000) || ((keycode >= 168) && (keycode <= 174))) {
+      mediaReport[0] = mediacode[(keycode & 0x00FF) - 168];
+    }
+    if (keycode & 0x1F00) {
+      report.modifiers |= ((keycode & 0x0F00) >> (4 + 4 * (keycode & 0x1000)));
+      k = (keycode & 0x00FF);
+    }
+    if ((keycode >= KC_LCTRL) && (keycode <= KC_RGUI)) {
+      report.modifiers |= (1 << (keycode - KC_LCTRL));
+    } else {
+      k = (keycode & 0x00FF);
+    }
+    if (k != 0) {
+      if ((report.keys[0] != k) && (report.keys[1] != k) &&
+          (report.keys[2] != k) && (report.keys[3] != k) &&
+          (report.keys[4] != k) && (report.keys[5] != k)) {
+        for (uint8_t i = 0; i < 6; i++) {
+          if (report.keys[i] == 0x00) {
+            report.keys[i] = k;
+            break;
+          }
+        }
+      }
+    }
+  } else {  // release key
+    if (keycode & 0x8000) {
+      curLayer = 0;
+    }
+    if ((keycode & 0x4000) || ((keycode >= 168) && (keycode <= 174))) {
+      mediaReport[0] = mediacode[(keycode & 0x00FF) - 168];
+      bleKeyboard.release(mediaReport);
+      mediaReport[0] = 0;
+      return;
+    }
+    if (keycode & 0x1F00) {
+      report.modifiers &= ~((keycode & 0x0F00) >> (4 + 4 * (keycode & 0x1000)));
+    }
+    k = (keycode & 0x00FF);
+    for (uint8_t i = 0; i < 6; i++) {
+      if (0 != k && report.keys[i] == k) {
+        releaseReport.keys[i] = k;
+      }
+    }
+    if ((keycode >= KC_LCTRL) && (keycode <= KC_RGUI)) {
+      report.modifiers &= !(1 << (keycode - KC_LCTRL));
+    }
+  }
+}
+
 // Scanning physical keys matrix
 void matrixScan() {
   uint8_t curState = 0;
@@ -249,7 +310,7 @@ void matrixScan() {
           matrixChange = 1;
           keyEvents[row][col].pressed = curState;
           // TODO call keyboard process
-          // keyProcess(row, col, curState);
+          keyProcess(row, col, curState);
         }
       }
       keyEvents[row][col].curState = curState;
@@ -257,83 +318,6 @@ void matrixScan() {
     gpio_set_level(rowPins[row], 0);
   }
   // keysProcess();
-}
-
-const uint8_t mediacode[] = {16, 32, 64, 1, 2, 4, 8};
-void matrixPress(uint16_t keycode, uint8_t _hold) {
-  uint8_t k = 0;
-  if (keycode != DEBUG) {
-    uint8_t mediaReport[2] = {0, 0};
-    if (_hold) {
-      curLayer = _curLayer;
-      report.modifiers = _modifiers;
-      if (keycode & 0x2000) {
-        report.modifiers |=
-            ((keycode & 0x0F00) >> (4 + 4 * (keycode & 0x1000)));
-      }
-    } else {
-      if (keycode & 0x8000) {
-        curLayer = ((keycode & 0x0F00) >> 8);
-      }
-    }
-    // consumer control key
-    if ((keycode & 0x4000) || ((keycode >= 168) && (keycode <= 174))) {
-      mediaReport[0] = mediacode[(keycode & 0x00FF) - 168];
-      bleKeyboard.press(mediaReport);
-    }
-
-    if (keycode & 0x1F00) {
-      report.modifiers |= ((keycode & 0x0F00) >> (4 + 4 * (keycode & 0x1000)));
-      k = (keycode & 0x00FF);
-    } else {
-      if ((keycode >= KC_MS_U) & (keycode <= KC_ACL2)) {
-        // mouse
-        switch (keycode) {
-          case KC_MS_U:
-            bleKeyboard.move(0, -1);
-            break;
-          case KC_MS_D:
-            bleKeyboard.move(0, 1);
-            break;
-          case KC_MS_L:
-            bleKeyboard.move(-1, 0);
-            break;
-          case KC_MS_R:
-            bleKeyboard.move(1, 0);
-            break;
-          case KC_MS_BTN1:
-            bleKeyboard.click(1);
-            break;
-          case KC_MS_BTN2:
-            bleKeyboard.click(2);
-            break;
-          case KC_MS_BTN3:
-            bleKeyboard.click(4);
-            break;
-          default:
-            break;
-        }
-      } else {
-        if ((keycode >= KC_LCTRL) && (keycode <= KC_RGUI)) {
-          report.modifiers |= (1 << (keycode - KC_LCTRL));
-        } else {
-          k = (keycode & 0x00FF);
-        }
-      }
-    }
-  }
-  if (k != 0) {
-    if ((report.keys[0] != k) && (report.keys[1] != k) &&
-        (report.keys[2] != k) && (report.keys[3] != k) &&
-        (report.keys[4] != k) && (report.keys[5] != k)) {
-      for (uint8_t i = 0; i < 6; i++) {
-        if (report.keys[i] == 0x00) {
-          report.keys[i] = k;
-          break;
-        }
-      }
-    }
-  }
 }
 
 // Keyboard state array initialize
@@ -559,6 +543,10 @@ void setup() {
 }
 
 void bleSendReport() {
+  if (mediaReport[0] != 0) {
+    bleKeyboard.press(mediaReport);
+    mediaReport[0] = 0;
+  }
   if (reportReady > 0) {
     Serial.printf("reportReady = %d ", reportReady);
     bleKeyboard.sendReport(&report);

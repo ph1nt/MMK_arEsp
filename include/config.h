@@ -117,6 +117,7 @@ uint8_t matrixChange = 0;  // semafor to make analise
 uint8_t reportReady = 0;
 KeyReport report = {0};
 KeyReport releaseReport = {0};
+uint8_t mediaReport[2] = {0, 0};
 uint8_t powerSave = 0;
 uint64_t msec, lsec = 0;
 uint64_t matrixTick = 0;
